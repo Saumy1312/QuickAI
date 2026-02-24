@@ -67,12 +67,3 @@ export const toggleLikeCreations = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 };
-export const deleteCreation = async (req, res) => {
-    try {
-        const { id } = req.params;
-        await sql`DELETE FROM creations WHERE id = ${id}`;
-        res.json({ success: true });
-    } catch (error) {
-        res.json({ success: false, message: error.message });
-    }
-};
