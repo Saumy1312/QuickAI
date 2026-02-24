@@ -7,5 +7,5 @@ const userRouter = express.Router();
 userRouter.get('/get-user-creations', auth, getUserCreations)
 userRouter.get('/get-published-creations', auth, getUserPublishedCreations)
 userRouter.post('/toggle-like-creations', auth, toggleLikeCreations)
-
+userRouter.delete('/delete-creation/:id', auth, deleteCreation)
 export default userRouter;
