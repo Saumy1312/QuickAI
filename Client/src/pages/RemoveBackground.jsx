@@ -1,107 +1,75 @@
 import { Eraser, Sparkles } from 'lucide-react';
 import React, { useState } from 'react'
 import toast from 'react-hot-toast';
-import Markdown from 'react-markdown';
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
 
 axios.defaults.baseURL = import.meta.env.VITE_BASE_URL;
 
 const RemoveBackground = () => {
-
   const [input, setInput] = useState('');
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState('');
-
   const { getToken } = useAuth();
 
-  // handle file change + preview
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setInput(file);
     if (file) {
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        setPreview(ev.target.result); // full quality preview
-      };
+      reader.onload = (ev) => setPreview(ev.target.result);
       reader.readAsDataURL(file);
-    } else {
-      setPreview(null);
-    }
+    } else { setPreview(null); }
   };
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
-
       const formData = new FormData();
       formData.append('image', input);
-
-      const { data } = await axios.post('/api/ai/remove-image-background', formData,
-        { headers: { Authorization: `Bearer ${await getToken()}` } }
-      );
-
-      if (data.success) {
-        setContent(data.content);
-      } else {
-        toast.error(data.message);
-      }
-
-    } catch (error) {
-      toast.error(error.message);
-    }
+      const { data } = await axios.post('/api/ai/remove-image-background', formData, { headers: { Authorization: `Bearer ${await getToken()}` } });
+      if (data.success) { setContent(data.content); } else { toast.error(data.message); }
+    } catch (error) { toast.error(error.message); }
     setLoading(false);
   };
 
   return (
-    <div className='h-full overflow-y-scroll p-6 flex items-start flex-wrap gap-4 text-slate-700'>
+    <div className='h-full overflow-y-auto p-6 flex items-start flex-wrap gap-4 bg-[#0A0A0D] text-white'>
       {/* left col */}
-      <form onSubmit={onSubmitHandler} className='w-full max-w-lg p-4 bg-white rounded-lg border border-gray-200'>
+      <form onSubmit={onSubmitHandler} className='w-full max-w-lg p-4 bg-[#0F0F12] rounded-lg border border-white/10'>
         <div className='flex items-center gap-3'>
           <Sparkles className='w-6 text-[#FF4938]' />
           <h1 className='text-xl font-semibold'>Background Remover</h1>
         </div>
-        <p className='mt-6 text-sm font-medium'>Upload image</p>
-        <input
-          onChange={handleFileChange}
-          type="file"
-          accept='image/*'
-          className='w-full p-2 px-3 mt-2 outline-none text-sm rounded-md border border-gray-300 text-gray-600'
-          required
-        />
-        {preview && (
-          <img src={preview} alt="Preview" className='mt-3 w-50 h-32 object-cover rounded-md border border-gray-200' />
-        )}
+        <p className='mt-6 text-sm font-medium text-gray-300'>Upload image</p>
+        <input onChange={handleFileChange} type="file" accept='image/*'
+          className='w-full p-2 px-3 mt-2 outline-none text-sm rounded-md border border-white/10 bg-white/5 text-gray-300 file:mr-3 file:text-xs file:bg-white/10 file:border-0 file:text-gray-300 file:rounded file:px-2 file:py-1 cursor-pointer'
+          required />
+        {preview && <img src={preview} alt="Preview" className='mt-3 w-50 h-32 object-cover rounded-md border border-white/10' />}
         <p className='text-xs text-gray-500 font-light mt-1'>Supports JPG, PNG, and other image formats</p>
-
-        <button disabled={loading} type='submit' className='w-full flex justify-center items-center gap-2
-          bg-gradient-to-r from-[#F6AB41] to-[#FF4938] text-white px-4 py-2 mt-6 text-sm rounded-lg cursor-pointer'>
-          {
-            loading
-              ? <span className='w-4 h-4 my-1 rounded-full border-2 border-t-transparent animate-spin'></span>
-              : <Eraser className='w-5' />
-          }
+        <button disabled={loading} type='submit' className='w-full flex justify-center items-center gap-2 bg-gradient-to-r from-[#F6AB41] to-[#FF4938] text-white px-4 py-2 mt-6 text-sm rounded-lg cursor-pointer disabled:opacity-50'>
+          {loading ? <span className='w-4 h-4 my-1 rounded-full border-2 border-t-transparent animate-spin'></span> : <Eraser className='w-5' />}
           Remove background
         </button>
       </form>
 
       {/* right col */}
-      <div className='w-full max-w-lg p-4 bg-white rounded-lg flex flex-col border border-gray-200 min-h-96'>
-        <div className='flex item-center gap-3'>
+      <div className='w-full max-w-lg p-4 bg-[#0F0F12] rounded-lg flex flex-col border border-white/10 min-h-96'>
+        <div className='flex items-center gap-3'>
           <Eraser className='w-5 h-5 text-[#FF4938]' />
           <h1 className='text-xl font-semibold'>Processed Image</h1>
         </div>
         {!content ? (
           <div className='flex-1 flex justify-center items-center'>
-            <div className='text-sm flex flex-col items-center gap-5 text-gray-400'>
+            <div className='text-sm flex flex-col items-center gap-5 text-gray-600'>
               <Eraser className='w-9 h-9' />
               <p>Upload an image and click "Remove Background" to get started</p>
             </div>
           </div>
         ) : (
-          <img src={content} alt="image" className='mt-3 w-full h-full' />
+          <img src={content} alt="image" className='mt-3 w-full h-full rounded-lg' />
         )}
       </div>
     </div>

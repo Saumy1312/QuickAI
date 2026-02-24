@@ -17,9 +17,21 @@ const AiChat = () => {
   const [editingTitle, setEditingTitle] = useState('')
   const [showSidebar, setShowSidebar] = useState(false)
   const messagesEndRef = useRef(null)
+  const scrollContainerRef = useRef(null)
   const { getToken } = useAuth()
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // Only auto-scroll if user is already near the bottom
+  const scrollToBottomIfNearEnd = () => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const threshold = 150 // px from bottom
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  useEffect(() => { scrollToBottomIfNearEnd() }, [messages])
   useEffect(() => { fetchSessions() }, [])
 
   const fetchSessions = async () => {
@@ -64,6 +76,8 @@ const AiChat = () => {
     if (!input.trim()) return
     setMessages(prev => [...prev, { role: 'user', content: input }])
     setInput('')
+    // Force scroll to bottom when user sends a new message
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     try {
       setLoading(true)
       const { data } = await axios.post('/api/ai/ai-chat', { prompt: input, sessionId: currentSessionId }, { headers: { Authorization: `Bearer ${await getToken()}` } })
@@ -139,7 +153,8 @@ const AiChat = () => {
           <h1 className='text-base font-semibold'>AI Assistant</h1>
         </div>
 
-        <div className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
+        {/* ✅ Added scrollContainerRef here */}
+        <div ref={scrollContainerRef} className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
           {messages.length === 0 && (
             <div className='flex-1 flex flex-col justify-center items-center text-gray-600 gap-3 h-full'>
               <MessageCircle className='w-10 h-10 opacity-20' />
