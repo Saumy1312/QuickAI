@@ -15,6 +15,8 @@ import { useAuth } from '@clerk/clerk-react'
 import {Toaster} from 'react-hot-toast'
 import GenerateCode from './pages/GenerateCode'
 import AiChat from './pages/AiChat.jsx' 
+import ResumeJobMatcher from './pages/ResumeJobMatcher'
+import ScreenshotBugReport from './pages/ScreenshotBugReport'
 
 
  
@@ -32,12 +34,14 @@ const App = () => {
           <Route path="ai-chat" element={<AiChat />} />
           <Route path="generate-code" element={<GenerateCode />} />
           <Route path='write-article' element= {<WriteArticle />}/>
-          <Route path='blog-titles' element= {<BlogTitles />}/>
           <Route path='generate-images' element= {<GenerateImages />}/>
           <Route path='remove-background' element= {<RemoveBackground />}/>
           <Route path='remove-object' element= {<RemoveObject />}/>
           <Route path='review-resume' element= {<ReviewResume />}/>
-          <Route path='community' element= {<Community />}/>
+          <Route path='resume-job-matcher' element={<ResumeJobMatcher />}/>
+          <Route path='screenshot-bug-report' element={<ScreenshotBugReport />}/>  
+          <Route path='community' element= {<Community />}/>   
+          
         </Route>
         
       </Routes>
