@@ -10,9 +10,13 @@ axios.defaults.baseURL = import.meta.env.VITE_BASE_URL;
 const AiChat = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('ai-chat-messages')) || [] } catch { return [] }
+  })
   const [sessions, setSessions] = useState([])
-  const [currentSessionId, setCurrentSessionId] = useState(null)
+  const [currentSessionId, setCurrentSessionId] = useState(() => {
+    return sessionStorage.getItem('ai-chat-session-id') || null
+  })
   const [editingId, setEditingId] = useState(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [showSidebar, setShowSidebar] = useState(false)
@@ -20,11 +24,10 @@ const AiChat = () => {
   const scrollContainerRef = useRef(null)
   const { getToken } = useAuth()
 
-  // Only auto-scroll if user is already near the bottom
   const scrollToBottomIfNearEnd = () => {
     const container = scrollContainerRef.current
     if (!container) return
-    const threshold = 150 // px from bottom
+    const threshold = 150
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
     if (isNearBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -33,6 +36,19 @@ const AiChat = () => {
 
   useEffect(() => { scrollToBottomIfNearEnd() }, [messages])
   useEffect(() => { fetchSessions() }, [])
+
+  // Save messages and sessionId to sessionStorage whenever they change
+  useEffect(() => {
+    sessionStorage.setItem('ai-chat-messages', JSON.stringify(messages))
+  }, [messages])
+
+  useEffect(() => {
+    if (currentSessionId) {
+      sessionStorage.setItem('ai-chat-session-id', currentSessionId)
+    } else {
+      sessionStorage.removeItem('ai-chat-session-id')
+    }
+  }, [currentSessionId])
 
   const fetchSessions = async () => {
     try {
@@ -44,11 +60,23 @@ const AiChat = () => {
   const loadSession = async (id) => {
     try {
       const { data } = await axios.get(`/api/ai/chat-messages/${id}`, { headers: { Authorization: `Bearer ${await getToken()}` } })
-      if (data.success) { setMessages(data.messages); setCurrentSessionId(id); setShowSidebar(false) }
+      if (data.success) {
+        setMessages(data.messages)
+        setCurrentSessionId(id)
+        setShowSidebar(false)
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+      }
     } catch (e) { toast.error(e.message) }
   }
 
-  const startNewChat = () => { setMessages([]); setCurrentSessionId(null); setInput(''); setShowSidebar(false) }
+  const startNewChat = () => {
+    setMessages([])
+    setCurrentSessionId(null)
+    setInput('')
+    setShowSidebar(false)
+    sessionStorage.removeItem('ai-chat-messages')
+    sessionStorage.removeItem('ai-chat-session-id')
+  }
 
   const deleteSession = async (e, id) => {
     e.stopPropagation()
@@ -74,16 +102,29 @@ const AiChat = () => {
   const onSubmitHandler = async (e) => {
     e.preventDefault()
     if (!input.trim()) return
-    setMessages(prev => [...prev, { role: 'user', content: input }])
+    const userMessage = { role: 'user', content: input }
+    setMessages(prev => [...prev, userMessage])
     setInput('')
-    // Force scroll to bottom when user sends a new message
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     try {
       setLoading(true)
-      const { data } = await axios.post('/api/ai/ai-chat', { prompt: input, sessionId: currentSessionId, messages: messages }, { headers: { Authorization: `Bearer ${await getToken()}` } })
-      if (data.success) { setMessages(prev => [...prev, { role: 'assistant', content: data.content }]); setCurrentSessionId(data.sessionId); fetchSessions() }
-      else { toast.error(data.message); setMessages(prev => prev.slice(0, -1)) }
-    } catch (e) { toast.error(e.message); setMessages(prev => prev.slice(0, -1)) }
+      const { data } = await axios.post('/api/ai/ai-chat', {
+        prompt: input,
+        sessionId: currentSessionId,
+        messages: messages  // send full history for context
+      }, { headers: { Authorization: `Bearer ${await getToken()}` } })
+      if (data.success) {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
+        setCurrentSessionId(data.sessionId)
+        fetchSessions()
+      } else {
+        toast.error(data.message)
+        setMessages(prev => prev.slice(0, -1))
+      }
+    } catch (e) {
+      toast.error(e.message)
+      setMessages(prev => prev.slice(0, -1))
+    }
     setLoading(false)
   }
 
@@ -151,9 +192,13 @@ const AiChat = () => {
             <Sparkles className='w-3.5 h-3.5 text-purple-400' />
           </div>
           <h1 className='text-base font-semibold'>AI Assistant</h1>
+          {messages.length > 0 && (
+            <button onClick={startNewChat} className='ml-auto text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors'>
+              <Plus className='w-3.5 h-3.5' /> New
+            </button>
+          )}
         </div>
 
-        {/* ✅ Added scrollContainerRef here */}
         <div ref={scrollContainerRef} className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
           {messages.length === 0 && (
             <div className='flex-1 flex flex-col justify-center items-center text-gray-600 gap-3 h-full'>
