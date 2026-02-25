@@ -3,7 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Protect, useUser, useClerk } from '@clerk/clerk-react';
 import {
   Eraser, FileText, Hash, House, Image,
-  LogOut, Scissors, SquarePen, Users
+  LogOut, Scissors, SquarePen, Users, Target,
+  Bug
 } from 'lucide-react';
 
 const navItems = [
