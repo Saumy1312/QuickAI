@@ -5,9 +5,12 @@ import toast from 'react-hot-toast'
 
 axios.defaults.baseURL = import.meta.env.VITE_BASE_URL
 
-const useGenerateImage = (endpoint) => {
+const useGenerateImage = (endpoint, sessionKey) => {
   const [loading, setLoading] = useState(false)
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState(() => {
+    if (!sessionKey) return ''
+    try { return JSON.parse(sessionStorage.getItem(sessionKey)) || '' } catch { return '' }
+  })
   const { getToken } = useAuth()
 
   const generate = async (payload) => {
@@ -16,8 +19,10 @@ const useGenerateImage = (endpoint) => {
       const { data } = await axios.post(endpoint, payload, {
         headers: { Authorization: `Bearer ${await getToken()}` }
       })
-      if (data.success) { setContent(data.content) }
-      else { toast.error(data.message) }
+      if (data.success) {
+        setContent(data.content)
+        if (sessionKey) sessionStorage.setItem(sessionKey, JSON.stringify(data.content))
+      } else { toast.error(data.message) }
     } catch (error) { toast.error(error.message) }
     setLoading(false)
   }

@@ -8,7 +8,7 @@ const BlogTitles = () => {
   const blogCategories = ['General', 'Technology', 'Business', 'Health', 'Lifestyle', 'Education', 'Travel', 'Food']
   const [selectedCategory, setSelectedCategory] = useState('General')
   const [input, setInput] = useState('')
-  const { loading, content, generate } = useGenerateText('/api/ai/generate-blog-title')
+  const { loading, content, generate } = useGenerateText('/api/ai/generate-blog-title', 'blog-titles-content')
   const { copied, copy } = useCopyToClipboard()
 
   const onSubmitHandler = async (e) => {
@@ -17,17 +17,17 @@ const BlogTitles = () => {
   }
 
   return (
-    <div className='h-full overflow-y-auto bg-[#0A0A0D] text-white'>
+    <div className='h-full flex flex-col bg-[#0A0A0D] text-white'>
       {/* Config bar */}
-      <div className='border-b border-white/10 bg-[#0F0F12] px-6 py-5'>
-        <div className='flex items-center gap-3 mb-5'>
-          <div className='w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center'>
-            <Sparkles className='w-4 h-4 text-[#8E37EB]' />
+      <div className='border-b border-white/10 bg-[#0F0F12] px-6 py-4 flex-shrink-0'>
+        <div className='flex items-center gap-3 mb-4'>
+          <div className='w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center'>
+            <Sparkles className='w-3.5 h-3.5 text-[#8E37EB]' />
           </div>
-          <h1 className='text-lg font-semibold'>Blog Title Generator</h1>
+          <h1 className='text-base font-semibold'>Blog Title Generator</h1>
         </div>
         <form onSubmit={onSubmitHandler}>
-          <div className='flex flex-wrap gap-3 items-end'>
+          <div className='flex gap-3 items-end flex-wrap'>
             <div className='flex-1 min-w-[200px]'>
               <label className='text-xs text-gray-500 uppercase tracking-wider font-medium mb-1.5 block'>Keyword</label>
               <input onChange={(e) => setInput(e.target.value)} value={input} type="text"
@@ -53,14 +53,14 @@ const BlogTitles = () => {
       </div>
 
       {/* Output */}
-      <div className='p-6'>
+      <div className='flex-1 overflow-y-auto p-6'>
         {!content ? (
-          <div className='flex flex-col items-center justify-center py-24 text-gray-700'>
+          <div className='flex flex-col items-center justify-center h-full text-gray-700'>
             <Hash className='w-10 h-10 mb-3 opacity-30' />
             <p className='text-sm'>Enter a keyword above and click Generate</p>
           </div>
         ) : (
-          <div className='max-w-3xl'>
+          <>
             <div className='flex items-center justify-between mb-4'>
               <p className='text-xs text-gray-500 uppercase tracking-wider font-medium'>Generated Titles</p>
               <button onClick={() => copy(content)} className='flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-gray-400 transition-colors'>
@@ -71,7 +71,7 @@ const BlogTitles = () => {
             <div className='bg-[#0F0F12] rounded-xl border border-white/10 p-6'>
               <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{content}</Markdown></div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

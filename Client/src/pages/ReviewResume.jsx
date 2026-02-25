@@ -11,7 +11,9 @@ axios.defaults.baseURL = import.meta.env.VITE_BASE_URL
 const ReviewResume = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('review-resume-content')) || '' } catch { return '' }
+  })
   const [analysisType, setAnalysisType] = useState('review')
   const { getToken } = useAuth()
   const { copied, copy } = useCopyToClipboard()
@@ -24,24 +26,26 @@ const ReviewResume = () => {
       formData.append('resume', input)
       formData.append('analysisType', analysisType)
       const { data } = await axios.post('/api/ai/resume-review', formData, { headers: { Authorization: `Bearer ${await getToken()}` } })
-      if (data.success) { setContent(data.content) } else { toast.error(data.message) }
+      if (data.success) {
+        setContent(data.content)
+        sessionStorage.setItem('review-resume-content', JSON.stringify(data.content))
+      } else { toast.error(data.message) }
     } catch (error) { toast.error(error.message) }
     setLoading(false)
   }
 
   return (
-    <div className='h-full overflow-y-auto bg-[#0A0A0D] text-white'>
+    <div className='h-full flex flex-col bg-[#0A0A0D] text-white'>
       {/* Config bar */}
-      <div className='border-b border-white/10 bg-[#0F0F12] px-6 py-5'>
-        <div className='flex items-center gap-3 mb-5'>
-          <div className='w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center'>
-            <Sparkles className='w-4 h-4 text-[#00DA83]' />
+      <div className='border-b border-white/10 bg-[#0F0F12] px-6 py-4 flex-shrink-0'>
+        <div className='flex items-center gap-3 mb-4'>
+          <div className='w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center'>
+            <Sparkles className='w-3.5 h-3.5 text-[#00DA83]' />
           </div>
-          <h1 className='text-lg font-semibold'>Resume Analysis</h1>
+          <h1 className='text-base font-semibold'>Resume Analysis</h1>
         </div>
         <form onSubmit={onSubmitHandler}>
-          <div className='flex flex-wrap gap-3 items-end'>
-            {/* Analysis type */}
+          <div className='flex gap-3 items-end flex-wrap'>
             <div>
               <label className='text-xs text-gray-500 uppercase tracking-wider font-medium mb-1.5 block'>Analysis Type</label>
               <div className='flex gap-1.5'>
@@ -53,7 +57,6 @@ const ReviewResume = () => {
                 ))}
               </div>
             </div>
-            {/* File upload */}
             <div className='flex-1 min-w-[200px]'>
               <label className='text-xs text-gray-500 uppercase tracking-wider font-medium mb-1.5 block'>Resume (PDF)</label>
               <input onChange={(e) => setInput(e.target.files[0])} type="file" accept='application/pdf'
@@ -69,14 +72,14 @@ const ReviewResume = () => {
       </div>
 
       {/* Output */}
-      <div className='p-6'>
+      <div className='flex-1 overflow-y-auto p-6'>
         {!content ? (
-          <div className='flex flex-col items-center justify-center py-24 text-gray-700'>
+          <div className='flex flex-col items-center justify-center h-full text-gray-700'>
             <FileText className='w-10 h-10 mb-3 opacity-30' />
             <p className='text-sm'>Upload your resume above and click Review</p>
           </div>
         ) : (
-          <div className='max-w-3xl'>
+          <>
             <div className='flex items-center justify-between mb-4'>
               <p className='text-xs text-gray-500 uppercase tracking-wider font-medium'>
                 {analysisType === 'ats' ? 'ATS Analysis Results' : 'Review Results'}
@@ -89,7 +92,7 @@ const ReviewResume = () => {
             <div className='bg-[#0F0F12] rounded-xl border border-white/10 p-6'>
               <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{content}</Markdown></div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
