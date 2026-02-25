@@ -1,5 +1,5 @@
-import { FileText, Sparkles, Search, CheckCircle, Copy, Check } from 'lucide-react'
-import React, { useState } from 'react'
+import { FileText, Sparkles, Search, CheckCircle, Copy, Check, Upload } from 'lucide-react'
+import React, { useState, useRef } from 'react'
 import Markdown from 'react-markdown'
 import axios from 'axios'
 import { useAuth } from '@clerk/clerk-react'
@@ -9,17 +9,41 @@ import useCopyToClipboard from '../hooks/useCopyToClipboard'
 axios.defaults.baseURL = import.meta.env.VITE_BASE_URL
 
 const ReviewResume = () => {
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(null)
+  const [fileName, setFileName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const [content, setContent] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('review-resume-content')) || '' } catch { return '' }
   })
   const [analysisType, setAnalysisType] = useState('review')
   const { getToken } = useAuth()
   const { copied, copy } = useCopyToClipboard()
+  const fileInputRef = useRef(null)
+
+  const handleFile = (file) => {
+    if (file && file.type === 'application/pdf') {
+      setInput(file)
+      setFileName(file.name)
+    } else {
+      toast.error('Please upload a PDF file')
+    }
+  }
+
+  const handleFileChange = (e) => handleFile(e.target.files[0])
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setDragging(false)
+    handleFile(e.dataTransfer.files[0])
+  }
+
+  const handleDragOver = (e) => { e.preventDefault(); setDragging(true) }
+  const handleDragLeave = () => setDragging(false)
 
   const onSubmitHandler = async (e) => {
     e.preventDefault()
+    if (!input) return toast.error('Please upload a resume PDF')
     try {
       setLoading(true)
       const formData = new FormData()
@@ -57,12 +81,24 @@ const ReviewResume = () => {
                 ))}
               </div>
             </div>
+
+            {/* Resume upload with drag & drop */}
             <div className='flex-1 min-w-[200px]'>
               <label className='text-xs text-gray-500 uppercase tracking-wider font-medium mb-1.5 block'>Resume (PDF)</label>
-              <input onChange={(e) => setInput(e.target.files[0])} type="file" accept='application/pdf'
-                className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-gray-300 file:mr-3 file:text-xs file:bg-white/10 file:border-0 file:text-gray-300 file:rounded file:px-2 file:py-1 cursor-pointer'
-                required />
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors
+                  ${dragging ? 'border-emerald-500/60 bg-emerald-500/10' : 'bg-white/5 border-white/10 hover:border-white/20'}`}
+              >
+                <Upload className='w-4 h-4 text-gray-400 flex-shrink-0' />
+                <span className='text-sm text-gray-400 truncate'>{fileName || 'Upload or drag PDF...'}</span>
+                <input ref={fileInputRef} onChange={handleFileChange} type="file" accept='application/pdf' className='hidden' />
+              </div>
             </div>
+
             <button disabled={loading} type='submit' className='flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#00DA83] to-[#009BB3] text-white text-sm font-medium disabled:opacity-50 whitespace-nowrap'>
               {loading ? <><span className='w-4 h-4 rounded-full border-2 border-t-transparent animate-spin'></span>Analyzing...</>
                 : analysisType === 'ats' ? <><CheckCircle className='w-4 h-4' />Check ATS</> : <><FileText className='w-4 h-4' />Review</>}

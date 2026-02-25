@@ -1,5 +1,5 @@
 import { FileText, Sparkles, Target, Copy, Check, Upload } from 'lucide-react'
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import Markdown from 'react-markdown'
 import axios from 'axios'
 import { useAuth } from '@clerk/clerk-react'
@@ -13,17 +13,33 @@ const ResumeJobMatcher = () => {
   const [fileName, setFileName] = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [loading, setLoading] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const [content, setContent] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('resume-match-content')) || '' } catch { return '' }
   })
   const { getToken } = useAuth()
   const { copied, copy } = useCopyToClipboard()
+  const fileInputRef = useRef(null)
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    if (file) { setResume(file); setFileName(file.name) }
-    else { setResume(null); setFileName('') }
+  const handleFile = (file) => {
+    if (file && file.type === 'application/pdf') {
+      setResume(file)
+      setFileName(file.name)
+    } else {
+      toast.error('Please upload a PDF file')
+    }
   }
+
+  const handleFileChange = (e) => handleFile(e.target.files[0])
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setDragging(false)
+    handleFile(e.dataTransfer.files[0])
+  }
+
+  const handleDragOver = (e) => { e.preventDefault(); setDragging(true) }
+  const handleDragLeave = () => setDragging(false)
 
   const onSubmitHandler = async (e) => {
     e.preventDefault()
@@ -57,14 +73,21 @@ const ResumeJobMatcher = () => {
 
         <form onSubmit={onSubmitHandler}>
           <div className='flex gap-3 items-end flex-wrap'>
-            {/* Resume upload */}
+            {/* Resume upload with drag & drop */}
             <div className='w-56 flex-shrink-0'>
               <label className='text-xs text-gray-500 uppercase tracking-wider font-medium mb-1.5 block'>Your Resume (PDF)</label>
-              <label className='flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 cursor-pointer transition-colors'>
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors
+                  ${dragging ? 'border-violet-500/60 bg-violet-500/10' : 'bg-white/5 border-white/10 hover:border-white/20'}`}
+              >
                 <Upload className='w-4 h-4 text-gray-400 flex-shrink-0' />
-                <span className='text-sm text-gray-400 truncate'>{fileName || 'Upload PDF...'}</span>
-                <input onChange={handleFileChange} type="file" accept='application/pdf' className='hidden' required />
-              </label>
+                <span className='text-sm text-gray-400 truncate'>{fileName || 'Upload or drag PDF...'}</span>
+                <input ref={fileInputRef} onChange={handleFileChange} type="file" accept='application/pdf' className='hidden' />
+              </div>
             </div>
 
             {/* Job description */}
