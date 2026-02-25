@@ -321,3 +321,157 @@ export const aiChat = async (req, res) => {
         res.json({ success: false, message: error.message })
     }
 }
+// Add these two functions to your existing aiController.js
+
+export const resumeJobMatcher = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { jobDescription } = req.body;
+        const resume = req.file;
+        const plan = req.plan;
+        const free_usage = req.free_usage;
+
+        if (resume.size > 5 * 1024 * 1024) {
+            return res.json({ success: false, message: "Resume file size exceeds 5MB." })
+        }
+
+        const dataBuffer = fs.readFileSync(resume.path)
+        const pdfData = await pdf(dataBuffer)
+
+        const prompt = `You are an expert ATS and career coach. Analyze this resume against the job description and provide a detailed match report.
+
+Resume:
+${pdfData.text}
+
+Job Description:
+${jobDescription}
+
+Provide your analysis in this exact format:
+
+## Match Score: [X/100]
+
+## Why This Score
+[2-3 sentences explaining the score]
+
+## ✅ Strong Matches
+[List skills/experience the candidate has that match the JD]
+
+## ❌ Missing Keywords
+[List important keywords/skills from JD that are missing in resume]
+
+## ⚠️ Partially Matched
+[List things that are close but not exact matches]
+
+## 📝 Tailored Cover Letter
+[Write a personalized cover letter using details from both the resume and job description. Make it specific, not generic.]
+
+## 🎯 Quick Wins to Improve Score
+[3-5 specific changes to make to the resume to increase match score]`
+
+        const response = await AI.chat.completions.create({
+            model: "gemini-2.0-flash",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7,
+            max_tokens: 3000,
+        });
+
+        const content = response.choices[0].message.content
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type) 
+        VALUES (${userId}, ${'Resume vs Job Description match analysis'}, ${content}, 'resume-match')`;
+
+        if (plan !== 'premium') {
+            await clerkClient.users.updateUserMetadata(userId, {
+                privateMetadata: { free_usage: free_usage + 1 }
+            })
+        }
+
+        res.json({ success: true, content })
+
+    } catch (error) {
+        console.log(error.message)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+export const screenshotToBugReport = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { appContext } = req.body;
+        const image = req.file;
+        const plan = req.plan;
+        const free_usage = req.free_usage;
+
+        // Upload image to cloudinary to get a URL
+        const { secure_url } = await cloudinary.uploader.upload(image.path)
+
+        const prompt = `You are a senior QA engineer. Analyze this UI screenshot and generate a professional bug report.
+
+${appContext ? `App Context: ${appContext}` : ''}
+
+Generate a detailed bug report in this exact format:
+
+## 🐛 Bug Title
+[A clear, concise title for this bug]
+
+## Severity
+[Critical / High / Medium / Low] — [One line reason]
+
+## 📋 Description
+[Clear description of what the bug is]
+
+## 🔁 Steps to Reproduce
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+[Add more steps as needed]
+
+## ✅ Expected Behavior
+[What should have happened]
+
+## ❌ Actual Behavior
+[What actually happened based on the screenshot]
+
+## 🌍 Environment
+- Browser: [If visible or Unknown]
+- Device: [If visible or Unknown]
+- Screen: [Describe what's visible]
+
+## 💡 Suggested Fix
+[Technical suggestion for how to fix this bug]
+
+## 📎 Additional Notes
+[Any other observations from the screenshot]`
+
+        // Use Gemini vision to analyze the screenshot
+        const response = await AI.chat.completions.create({
+            model: "gemini-2.0-flash",
+            messages: [{
+                role: "user",
+                content: [
+                    { type: "text", text: prompt },
+                    { type: "image_url", image_url: { url: secure_url } }
+                ]
+            }],
+            temperature: 0.3,
+            max_tokens: 2000,
+        });
+
+        const content = response.choices[0].message.content
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type) 
+        VALUES (${userId}, ${'Screenshot to bug report'}, ${content}, 'bug-report')`;
+
+        if (plan !== 'premium') {
+            await clerkClient.users.updateUserMetadata(userId, {
+                privateMetadata: { free_usage: free_usage + 1 }
+            })
+        }
+
+        res.json({ success: true, content })
+
+    } catch (error) {
+        console.log(error.message)
+        res.json({ success: false, message: error.message })
+    }
+}
