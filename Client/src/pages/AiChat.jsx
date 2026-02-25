@@ -80,7 +80,7 @@ const AiChat = () => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     try {
       setLoading(true)
-      const { data } = await axios.post('/api/ai/ai-chat', { prompt: input, sessionId: currentSessionId }, { headers: { Authorization: `Bearer ${await getToken()}` } })
+      const { data } = await axios.post('/api/ai/ai-chat', { prompt: input, sessionId: currentSessionId, messages: messages }, { headers: { Authorization: `Bearer ${await getToken()}` } })
       if (data.success) { setMessages(prev => [...prev, { role: 'assistant', content: data.content }]); setCurrentSessionId(data.sessionId); fetchSessions() }
       else { toast.error(data.message); setMessages(prev => prev.slice(0, -1)) }
     } catch (e) { toast.error(e.message); setMessages(prev => prev.slice(0, -1)) }

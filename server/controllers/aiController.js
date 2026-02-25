@@ -49,9 +49,6 @@ if(plan !== 'premium') {
 res.json({success: 'true', content})
 
 
-
-
-
     } catch (error) {
         console.log(error.message)
         res.json({success: false, message: error.message})
@@ -91,9 +88,6 @@ if(plan !== 'premium') {
 res.json({success: 'true', content})
 
 
-
-
-
     } catch (error) {
         console.log(error.message)
         res.json({success: false, message: error.message})
@@ -123,22 +117,10 @@ formData.append('prompt', prompt)
 
         const {secure_url} = await cloudinary.uploader.upload(base64Image)
 
-
-
-
-
-
-
-
 await sql`INSERT INTO creations (user_id, prompt, content, type, publish)
 VALUES (${userId}, ${prompt}, ${secure_url}, 'image', ${publish ?? false})`;
 
-
-
 res.json({success: 'true', content: secure_url})
-
-
-
 
 
     } catch (error) {
@@ -157,13 +139,11 @@ export const removeImageBackground = async (req, res)=>{
             return res.json({success: false, message: "This feature is only available for premium subscription "})
         }
 
-
         const {secure_url} = await cloudinary.uploader.upload(image.path, {
             transformation: [
                 {
                     effect: 'background_removal',
                     background_removal: 'remove_the_background'
-
                 }
             ]
         })
@@ -178,6 +158,7 @@ res.json({success: 'true', content: secure_url})
         res.json({success: false, message: error.message})
     }
 }
+
 export const removeImageObject = async (req, res)=>{
     try {
         const {userId} = req.auth();
@@ -185,11 +166,9 @@ export const removeImageObject = async (req, res)=>{
         const image = req.file;
         const plan = req.plan;
 
-
         if(plan !== 'premium') {
             return res.json({success: false, message: "This feature is only available for premium subscription "})
         }
-
 
         const {public_id} = await cloudinary.uploader.upload(image.path)
 
@@ -214,9 +193,7 @@ export const resumeReview = async (req, res) => {
         const { userId } = req.auth();
         const resume = req.file;
         const plan = req.plan;
-        const { analysisType } = req.body; // Add this to distinguish between review and ATS check
-
-
+        const { analysisType } = req.body;
 
         if (resume.size > 5 * 1024 * 1024) {
             return res.json({ success: false, message: "Resume file size exceeds allowed size (5MB)." })
@@ -225,7 +202,6 @@ export const resumeReview = async (req, res) => {
         const dataBuffer = fs.readFileSync(resume.path)
         const pdfData = await pdf(dataBuffer)
 
-        // Different prompts based on analysis type
         let prompt;
         let dbType;
         
@@ -248,10 +224,7 @@ Resume Content: \n\n${pdfData.text}`;
 
         const response = await AI.chat.completions.create({
             model: "llama-3.3-70b-versatile",
-            messages: [{
-                role: "user",
-                content: prompt,
-            }],
+            messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 3000,
         });
@@ -264,9 +237,10 @@ Resume Content: \n\n${pdfData.text}`;
 
     } catch (error) {
         console.log(error.message)
-        res.json({ success: false, message: error.message })
+        res.json({success: false, message: error.message})
     }
 }
+
 export const generateCode = async (req, res) => {
     try {
         const { userId } = req.auth();
@@ -276,10 +250,7 @@ export const generateCode = async (req, res) => {
 
         const response = await AI.chat.completions.create({
             model: "llama-3.3-70b-versatile",
-            messages: [{
-                role: "user",
-                content: codePrompt,
-            }],
+            messages: [{ role: "user", content: codePrompt }],
             temperature: 0.3,
             max_tokens: 3000,
         });
@@ -292,20 +263,27 @@ export const generateCode = async (req, res) => {
 
     } catch (error) {
         console.log(error.message)
-        res.json({ success: false, message: error.message })
+        res.json({success: false, message: error.message})
     }
 }
+
 export const aiChat = async (req, res) => {
     try {
         const { userId } = req.auth();
-        const { prompt } = req.body;
+        const { prompt, messages = [] } = req.body;
+
+        // Build full conversation history
+        const conversationHistory = messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+        }))
+
+        // Add the new user message
+        conversationHistory.push({ role: 'user', content: prompt })
 
         const response = await AI.chat.completions.create({
             model: "llama-3.3-70b-versatile",
-            messages: [{
-                role: "user",
-                content: prompt,
-            }],
+            messages: conversationHistory,
             temperature: 0.7,
             max_tokens: 3000,
         });
@@ -318,10 +296,9 @@ export const aiChat = async (req, res) => {
 
     } catch (error) {
         console.log(error.message)
-        res.json({ success: false, message: error.message })
+        res.json({success: false, message: error.message})
     }
 }
-// Add these two functions to your existing aiController.js
 
 export const resumeJobMatcher = async (req, res) => {
     try {
@@ -390,7 +367,7 @@ Provide your analysis in this exact format:
 
     } catch (error) {
         console.log(error.message)
-        res.json({ success: false, message: error.message })
+        res.json({success: false, message: error.message})
     }
 }
 
@@ -402,7 +379,6 @@ export const screenshotToBugReport = async (req, res) => {
         const plan = req.plan;
         const free_usage = req.free_usage;
 
-        // Upload image to cloudinary to get a URL
         const { secure_url } = await cloudinary.uploader.upload(image.path)
 
         const prompt = `You are a senior QA engineer. Analyze this UI screenshot and generate a professional bug report.
@@ -443,7 +419,6 @@ Generate a detailed bug report in this exact format:
 ## 📎 Additional Notes
 [Any other observations from the screenshot]`
 
-        // Use Gemini vision to analyze the screenshot
         const response = await AI.chat.completions.create({
             model: "llama-3.3-70b-versatile",
             messages: [{
@@ -472,6 +447,6 @@ Generate a detailed bug report in this exact format:
 
     } catch (error) {
         console.log(error.message)
-        res.json({ success: false, message: error.message })
+        res.json({success: false, message: error.message})
     }
 }
