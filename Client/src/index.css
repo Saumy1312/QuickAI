@@ -24,3 +24,22 @@
     word-break: break-word !important;
   }
 }
+/* Add these lines to your App.css or index.css */
+
+/* Fix code blocks cutting off on mobile */
+pre {
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 100%;
+}
+
+code {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.prose pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
