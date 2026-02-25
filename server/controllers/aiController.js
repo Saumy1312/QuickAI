@@ -10,8 +10,8 @@ import pdf from 'pdf-parse/lib/pdf-parse.js';
 
 
 const AI = new OpenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: "https://api.groq.com/openai/v1"
 });
 export const generateArticle = async (req, res)=>{
     try {
