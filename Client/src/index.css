@@ -1,12 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
 @import "tailwindcss";
 
-
-*{
+* {
   font-family: "Outfit", sans-serif;
 }
 
-:root{
+:root {
   --color-primary: #5044E5;
 }
 
@@ -16,4 +15,12 @@
 
 .cl-drawerRoot {
   z-index: 9999 !important;
+}
+
+@media (max-width: 640px) {
+  .reset-tw pre, .reset-tw code {
+    font-size: 0.65rem !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
 }
