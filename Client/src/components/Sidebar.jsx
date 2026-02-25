@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Protect, useUser, useClerk } from '@clerk/clerk-react';
 import {
   Eraser, FileText, Hash, House, Image,
-  LogOut, Scissors, SquarePen, Users, Code
+  LogOut, Scissors, SquarePen, Users, Code, Target, Bug
 } from 'lucide-react';
 import { MessageCircle } from 'lucide-react';
 
@@ -16,6 +16,8 @@ const navItems = [
   { to: '/ai/remove-background', label: 'Remove Background', Icon: Eraser },
   { to: '/ai/remove-object', label: 'Remove Object', Icon: Scissors },
   { to: '/ai/review-resume', label: 'Review Resume', Icon: FileText },
+  { to: '/ai/resume-job-matcher', label: 'Resume Matcher', Icon: Target },
+  { to: '/ai/screenshot-bug-report', label: 'Bug Report', Icon: Bug },
   { to: '/ai/community', label: 'Community', Icon: Users },
 ];
 
