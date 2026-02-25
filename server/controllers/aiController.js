@@ -21,7 +21,7 @@ export const generateArticle = async (req, res)=>{
         const free_usage = req.free_usage;
 
         const response = await AI.chat.completions.create({
-    model: "gemini-2.0-flash",
+    model: "llama-3.3-70b-versatile",
     messages: [{
             role: "user",
             content: prompt,
@@ -66,7 +66,7 @@ export const generateBlogTitle = async (req, res)=>{
         const free_usage = req.free_usage;
 
         const response = await AI.chat.completions.create({
-    model: "gemini-2.0-flash",
+    model: "llama-3.3-70b-versatile",
     messages: [{
             role: "user",
             content: prompt,} ],
@@ -247,7 +247,7 @@ Resume Content: \n\n${pdfData.text}`;
         }
 
         const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+            model: "llama-3.3-70b-versatile",
             messages: [{
                 role: "user",
                 content: prompt,
@@ -275,7 +275,7 @@ export const generateCode = async (req, res) => {
         const codePrompt = `Generate code based on this request: ${prompt}. Only return the code with minimal explanation.`;
 
         const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+            model: "llama-3.3-70b-versatile",
             messages: [{
                 role: "user",
                 content: codePrompt,
@@ -301,7 +301,7 @@ export const aiChat = async (req, res) => {
         const { prompt } = req.body;
 
         const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+            model: "llama-3.3-70b-versatile",
             messages: [{
                 role: "user",
                 content: prompt,
@@ -369,7 +369,7 @@ Provide your analysis in this exact format:
 [3-5 specific changes to make to the resume to increase match score]`
 
         const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+            model: "llama-3.3-70b-versatile",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 3000,
@@ -445,7 +445,7 @@ Generate a detailed bug report in this exact format:
 
         // Use Gemini vision to analyze the screenshot
         const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+            model: "llama-3.3-70b-versatile",
             messages: [{
                 role: "user",
                 content: [
