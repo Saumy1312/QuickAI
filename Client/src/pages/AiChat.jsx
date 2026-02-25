@@ -10,56 +10,42 @@ axios.defaults.baseURL = import.meta.env.VITE_BASE_URL;
 const AiChat = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [messages, setMessages] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('ai-chat-messages')) || [] } catch { return [] }
-  })
+  const [messages, setMessages] = useState([])
   const [sessions, setSessions] = useState([])
-  const [currentSessionId, setCurrentSessionId] = useState(() => {
-    return sessionStorage.getItem('ai-chat-session-id') || null
-  })
+  const [currentSessionId, setCurrentSessionId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [showSidebar, setShowSidebar] = useState(false)
+  const [loadingSession, setLoadingSession] = useState(false)
   const messagesEndRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const { getToken } = useAuth()
 
-  const scrollToBottomIfNearEnd = () => {
-    const container = scrollContainerRef.current
-    if (!container) return
-    const threshold = 150
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
-    if (isNearBottom) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }
-
-  useEffect(() => { scrollToBottomIfNearEnd() }, [messages])
   useEffect(() => { fetchSessions() }, [])
 
-  // Save messages and sessionId to sessionStorage whenever they change
   useEffect(() => {
-    sessionStorage.setItem('ai-chat-messages', JSON.stringify(messages))
+    const container = scrollContainerRef.current
+    if (!container) return
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
+    if (isNearBottom) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  useEffect(() => {
-    if (currentSessionId) {
-      sessionStorage.setItem('ai-chat-session-id', currentSessionId)
-    } else {
-      sessionStorage.removeItem('ai-chat-session-id')
-    }
-  }, [currentSessionId])
 
   const fetchSessions = async () => {
     try {
-      const { data } = await axios.get('/api/ai/chat-sessions', { headers: { Authorization: `Bearer ${await getToken()}` } })
+      const { data } = await axios.get('/api/ai/chat-sessions', {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      })
       if (data.success) setSessions(data.sessions)
     } catch (e) { console.log(e.message) }
   }
 
   const loadSession = async (id) => {
+    if (loadingSession) return
     try {
-      const { data } = await axios.get(`/api/ai/chat-messages/${id}`, { headers: { Authorization: `Bearer ${await getToken()}` } })
+      setLoadingSession(true)
+      const { data } = await axios.get(`/api/ai/chat-messages/${id}`, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      })
       if (data.success) {
         setMessages(data.messages)
         setCurrentSessionId(id)
@@ -67,6 +53,7 @@ const AiChat = () => {
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       }
     } catch (e) { toast.error(e.message) }
+    setLoadingSession(false)
   }
 
   const startNewChat = () => {
@@ -74,28 +61,35 @@ const AiChat = () => {
     setCurrentSessionId(null)
     setInput('')
     setShowSidebar(false)
-    sessionStorage.removeItem('ai-chat-messages')
-    sessionStorage.removeItem('ai-chat-session-id')
   }
 
   const deleteSession = async (e, id) => {
     e.stopPropagation()
     try {
-      await axios.delete(`/api/ai/chat-sessions/${id}`, { headers: { Authorization: `Bearer ${await getToken()}` } })
+      await axios.delete(`/api/ai/chat-sessions/${id}`, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      })
       setSessions(prev => prev.filter(s => s.id !== id))
       if (currentSessionId === id) startNewChat()
       toast.success('Deleted!')
     } catch (e) { toast.error(e.message) }
   }
 
-  const startRename = (e, s) => { e.stopPropagation(); setEditingId(s.id); setEditingTitle(s.title) }
+  const startRename = (e, s) => {
+    e.stopPropagation()
+    setEditingId(s.id)
+    setEditingTitle(s.title)
+  }
 
   const saveRename = async (e, id) => {
     e.stopPropagation()
     try {
-      await axios.patch(`/api/ai/chat-sessions/${id}`, { title: editingTitle }, { headers: { Authorization: `Bearer ${await getToken()}` } })
+      await axios.patch(`/api/ai/chat-sessions/${id}`, { title: editingTitle }, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      })
       setSessions(prev => prev.map(s => s.id === id ? { ...s, title: editingTitle } : s))
-      setEditingId(null); toast.success('Renamed!')
+      setEditingId(null)
+      toast.success('Renamed!')
     } catch (e) { toast.error(e.message) }
   }
 
@@ -111,12 +105,16 @@ const AiChat = () => {
       const { data } = await axios.post('/api/ai/ai-chat', {
         prompt: input,
         sessionId: currentSessionId,
-        messages: messages  // send full history for context
+        messages: [...messages, userMessage]
       }, { headers: { Authorization: `Bearer ${await getToken()}` } })
+
       if (data.success) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
-        setCurrentSessionId(data.sessionId)
-        fetchSessions()
+        // If new session was created, update session list and set current
+        if (!currentSessionId) {
+          setCurrentSessionId(data.sessionId)
+          fetchSessions()
+        }
       } else {
         toast.error(data.message)
         setMessages(prev => prev.slice(0, -1))
@@ -130,7 +128,8 @@ const AiChat = () => {
 
   const SessionList = () => (
     <>
-      <button onClick={startNewChat} className='flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-gray-300 transition-colors'>
+      <button onClick={startNewChat}
+        className='flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-gray-300 transition-colors'>
         <Plus className='w-4 h-4' /> New Chat
       </button>
       <p className='text-xs text-gray-600 font-medium mt-3 px-1 uppercase tracking-wider'>History</p>
@@ -208,15 +207,21 @@ const AiChat = () => {
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-purple-600/20 border border-purple-500/30 text-purple-100 rounded-br-sm' : 'bg-[#0F0F12] border border-white/10 text-gray-300 rounded-bl-sm'}`}>
-                {msg.role === 'assistant' ? <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{msg.content}</Markdown></div> : msg.content}
+              <div className={`max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
+                ? 'bg-purple-600/20 border border-purple-500/30 text-purple-100 rounded-br-sm'
+                : 'bg-[#0F0F12] border border-white/10 text-gray-300 rounded-bl-sm'}`}>
+                {msg.role === 'assistant'
+                  ? <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{msg.content}</Markdown></div>
+                  : msg.content}
               </div>
             </div>
           ))}
           {loading && (
             <div className='flex justify-start'>
               <div className='bg-[#0F0F12] border border-white/10 px-4 py-3 rounded-xl rounded-bl-sm'>
-                <div className='flex gap-1'>{[0, 150, 300].map(d => <span key={d} className='w-2 h-2 bg-gray-500 rounded-full animate-bounce' style={{ animationDelay: `${d}ms` }}></span>)}</div>
+                <div className='flex gap-1'>
+                  {[0, 150, 300].map(d => <span key={d} className='w-2 h-2 bg-gray-500 rounded-full animate-bounce' style={{ animationDelay: `${d}ms` }}></span>)}
+                </div>
               </div>
             </div>
           )}
@@ -224,9 +229,11 @@ const AiChat = () => {
         </div>
 
         <form onSubmit={onSubmitHandler} className='p-3 border-t border-white/10 bg-[#0F0F12] flex gap-2 flex-shrink-0'>
-          <input type='text' value={input} onChange={e => setInput(e.target.value)} placeholder='Ask me anything...'
+          <input type='text' value={input} onChange={e => setInput(e.target.value)}
+            placeholder='Ask me anything...'
             className='flex-1 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-500 focus:border-purple-500/50 transition-colors min-w-0' required />
-          <button disabled={loading} className='flex items-center justify-center w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white transition-colors flex-shrink-0'>
+          <button disabled={loading}
+            className='flex items-center justify-center w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white transition-colors flex-shrink-0'>
             {loading ? <span className='w-4 h-4 rounded-full border-2 border-t-transparent animate-spin'></span> : <Send className='w-4 h-4' />}
           </button>
         </form>
