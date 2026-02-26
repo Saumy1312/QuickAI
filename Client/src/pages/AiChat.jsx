@@ -4,6 +4,13 @@ import axios from 'axios'
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 import Markdown from 'react-markdown';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Point to the PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 axios.defaults.baseURL = import.meta.env.VITE_BASE_URL;
 
@@ -15,6 +22,24 @@ const ALLOWED_FILE_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ]
+
+// Extract text from PDF entirely on the frontend — no size limit issues
+const extractPdfText = async (file) => {
+  const arrayBuffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  let fullText = ''
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items.map(item => item.str).join(' ')
+    fullText += `\n--- Page ${i} ---\n${pageText}`
+  }
+  // Truncate to ~12000 chars to stay within token limits
+  if (fullText.length > 12000) {
+    fullText = fullText.slice(0, 12000) + '\n\n[Document truncated due to length...]'
+  }
+  return fullText.trim()
+}
 
 const AiChat = () => {
   const [input, setInput] = useState('')
@@ -50,30 +75,23 @@ const AiChat = () => {
   const handleDragEnter = (e) => {
     e.preventDefault()
     dragCounter.current++
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) setIsDragging(true)
+    if (e.dataTransfer.items?.length > 0) setIsDragging(true)
   }
-
   const handleDragLeave = (e) => {
     e.preventDefault()
     dragCounter.current--
     if (dragCounter.current === 0) setIsDragging(false)
   }
-
-  const handleDragOver = (e) => { e.preventDefault() }
-
+  const handleDragOver = (e) => e.preventDefault()
   const handleDrop = async (e) => {
     e.preventDefault()
     setIsDragging(false)
     dragCounter.current = 0
     const file = e.dataTransfer.files[0]
     if (!file) return
-    if (file.type.startsWith('image/')) {
-      await processImage(file)
-    } else if (ALLOWED_FILE_TYPES.includes(file.type)) {
-      await processFile(file)
-    } else {
-      toast.error('Unsupported file type. Drop an image, PDF, Word, Excel, or TXT file.')
-    }
+    if (file.type.startsWith('image/')) await processImage(file)
+    else if (ALLOWED_FILE_TYPES.includes(file.type)) await processFile(file)
+    else toast.error('Unsupported file. Drop an image, PDF, Word, Excel, or TXT.')
   }
 
   // ── File processors ──────────────────────────────────────────
@@ -95,20 +113,46 @@ const AiChat = () => {
   }
 
   const processFile = async (file) => {
-    if (file.size > 10 * 1024 * 1024) return toast.error('File must be under 10MB')
-    setAttachment({ type: 'file', name: file.name, url: null, extractedText: null })
+    setAttachment({ type: 'file', name: file.name, extractedText: null })
+    setUploading(true)
     try {
-      setUploading(true)
-      const formData = new FormData()
-      formData.append('file', file)
-      const { data } = await axios.post('/api/ai/upload-chat-file', formData, {
-        headers: { Authorization: `Bearer ${await getToken()}` }
-      })
-      if (data.success) {
-        setAttachment({ type: 'file', name: file.name, url: null, extractedText: data.text })
-        toast.success('File ready!')
-      } else { toast.error(data.message); setAttachment(null) }
-    } catch { toast.error('Upload failed'); setAttachment(null) }
+      let text = ''
+
+      if (file.type === 'application/pdf') {
+        // ✅ Extract PDF text on the frontend — no size limit!
+        toast.loading('Reading PDF...', { id: 'pdf-extract' })
+        text = await extractPdfText(file)
+        toast.dismiss('pdf-extract')
+        if (!text) { toast.error('Could not extract text from this PDF (may be image-based)'); setAttachment(null); setUploading(false); return }
+
+      } else if (file.type === 'text/plain' || file.type === 'text/csv') {
+        // Read TXT/CSV directly
+        text = await file.text()
+        if (text.length > 12000) text = text.slice(0, 12000) + '\n\n[Truncated...]'
+
+      } else {
+        // Word/Excel — send to server (usually small files)
+        if (file.size > 4 * 1024 * 1024) {
+          toast.error('Word/Excel files must be under 4MB')
+          setAttachment(null); setUploading(false); return
+        }
+        const formData = new FormData()
+        formData.append('file', file)
+        const { data } = await axios.post('/api/ai/upload-chat-file', formData, {
+          headers: { Authorization: `Bearer ${await getToken()}` }
+        })
+        if (data.success) { text = data.text }
+        else { toast.error(data.message); setAttachment(null); setUploading(false); return }
+      }
+
+      setAttachment({ type: 'file', name: file.name, extractedText: text })
+      toast.success('File ready!')
+    } catch (e) {
+      console.error(e)
+      toast.dismiss('pdf-extract')
+      toast.error('Failed to read file')
+      setAttachment(null)
+    }
     setUploading(false)
   }
 
@@ -160,7 +204,8 @@ const AiChat = () => {
   }
 
   const startNewChat = () => {
-    setMessages([]); setCurrentSessionId(null); setInput(''); setAttachment(null); setShowSidebar(false)
+    setMessages([]); setCurrentSessionId(null); setInput('')
+    setAttachment(null); setShowSidebar(false)
   }
 
   const deleteSession = async (e, id) => {
@@ -174,7 +219,6 @@ const AiChat = () => {
   }
 
   const startRename = (e, s) => { e.stopPropagation(); setEditingId(s.id); setEditingTitle(s.title) }
-
   const saveRename = async (e, id) => {
     e.stopPropagation()
     try {
@@ -187,7 +231,7 @@ const AiChat = () => {
   const onSubmitHandler = async (e) => {
     e.preventDefault()
     if (!input.trim() && !attachment) return
-    if (attachment && !attachment.url && !attachment.extractedText) return toast.error('Still uploading, please wait')
+    if (attachment && !attachment.url && !attachment.extractedText) return toast.error('Still processing, please wait')
 
     const userMessage = {
       role: 'user', content: input,
@@ -268,12 +312,10 @@ const AiChat = () => {
 
   return (
     <div className='h-full flex text-white bg-[#0A0A0D] overflow-hidden'>
-      {/* Desktop Sidebar */}
       <div className='hidden sm:flex w-56 bg-[#0F0F12] border-r border-white/10 flex-col flex-shrink-0 p-3 gap-2'>
         <SessionList />
       </div>
 
-      {/* Mobile Sidebar */}
       {showSidebar && (
         <div className='sm:hidden fixed inset-0 z-50 flex'>
           <div className='w-72 bg-[#0F0F12] border-r border-white/10 flex flex-col p-3 gap-2'>
@@ -286,7 +328,6 @@ const AiChat = () => {
         </div>
       )}
 
-      {/* Main — drag & drop zone */}
       <div className='flex-1 flex flex-col overflow-hidden min-w-0 relative'
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -295,13 +336,13 @@ const AiChat = () => {
 
         {/* Drag overlay */}
         {isDragging && (
-          <div className='absolute inset-0 z-50 flex flex-col items-center justify-center bg-purple-900/30 backdrop-blur-sm border-2 border-dashed border-purple-400/60 rounded-none pointer-events-none'>
+          <div className='absolute inset-0 z-50 flex flex-col items-center justify-center bg-purple-900/30 backdrop-blur-sm border-2 border-dashed border-purple-400/60 pointer-events-none'>
             <div className='flex flex-col items-center gap-3'>
               <div className='w-16 h-16 rounded-2xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center'>
                 <Paperclip className='w-8 h-8 text-purple-300' />
               </div>
               <p className='text-purple-200 font-semibold text-lg'>Drop to attach</p>
-              <p className='text-purple-400 text-sm'>Images, PDF, Word, Excel, TXT</p>
+              <p className='text-purple-400 text-sm'>Images, PDF (any size), Word, Excel, TXT</p>
             </div>
           </div>
         )}
@@ -341,7 +382,7 @@ const AiChat = () => {
               <p className='text-sm text-center'>Ask me anything, upload a file, or drop one anywhere!</p>
               <div className='flex items-center gap-2 border border-dashed border-white/10 rounded-xl px-5 py-3 text-xs text-gray-700'>
                 <Paperclip className='w-3.5 h-3.5' />
-                Drag & drop images, PDF, Word, Excel, TXT here
+                Drag & drop images, PDF (any size), Word, Excel, TXT
               </div>
             </div>
           )}
@@ -350,9 +391,7 @@ const AiChat = () => {
               <div className={`group relative max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
                 ? 'bg-purple-600/20 border border-purple-500/30 text-purple-100 rounded-br-sm'
                 : 'bg-[#0F0F12] border border-white/10 text-gray-300 rounded-bl-sm'}`}>
-                {msg.imageUrl && (
-                  <img src={msg.imageUrl} alt="attached" className='w-full max-w-xs rounded-lg mb-2 border border-white/10' />
-                )}
+                {msg.imageUrl && <img src={msg.imageUrl} alt="attached" className='w-full max-w-xs rounded-lg mb-2 border border-white/10' />}
                 {msg.fileName && (
                   <div className='flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2 mb-2'>
                     <span className='text-lg'>{getFileIcon(msg.fileName)}</span>
@@ -396,7 +435,7 @@ const AiChat = () => {
                   <div>
                     <p className='text-xs text-white truncate max-w-[150px]'>{attachment.name}</p>
                     <p className='text-[10px] text-gray-500'>
-                      {uploading ? 'Extracting text...' : attachment.extractedText ? '✓ Ready' : 'Processing...'}
+                      {uploading ? 'Reading file...' : attachment.extractedText ? '✓ Ready' : 'Processing...'}
                     </p>
                   </div>
                 </>
