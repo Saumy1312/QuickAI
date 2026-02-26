@@ -6,22 +6,33 @@ import {v2 as cloudinary} from 'cloudinary'
 import FormData from "form-data";
 import fs from 'fs';
 import pdf from 'pdf-parse/lib/pdf-parse.js';
+import mammoth from 'mammoth';
 
 const AI = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: "https://api.groq.com/openai/v1"
 });
 
+const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const TEXT_MODEL = "llama-3.3-70b-versatile";
+
 export const generateArticle = async (req, res) => {
     try {
         const {userId} = req.auth();
-        const {prompt, length} = req.body;
+        const {prompt, length, imageUrl} = req.body;
         const plan = req.plan;
         const free_usage = req.free_usage;
 
+        const messages = imageUrl
+            ? [{ role: "user", content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: imageUrl } }
+            ]}]
+            : [{ role: "user", content: prompt }];
+
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [{ role: "user", content: prompt }],
+            model: imageUrl ? VISION_MODEL : TEXT_MODEL,
+            messages,
             temperature: 0.7,
             max_tokens: length,
         });
@@ -53,7 +64,7 @@ export const generateBlogTitle = async (req, res) => {
         const free_usage = req.free_usage;
 
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: TEXT_MODEL,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 500,
@@ -123,10 +134,7 @@ export const removeImageBackground = async (req, res) => {
         }
 
         const {secure_url} = await cloudinary.uploader.upload(image.path, {
-            transformation: [{
-                effect: 'background_removal',
-                background_removal: 'remove_the_background'
-            }]
+            transformation: [{ effect: 'background_removal', background_removal: 'remove_the_background' }]
         })
 
         await sql`INSERT INTO creations (user_id, prompt, content, type)
@@ -173,7 +181,6 @@ export const resumeReview = async (req, res) => {
     try {
         const { userId } = req.auth();
         const resume = req.file;
-        const plan = req.plan;
         const { analysisType } = req.body;
 
         if (resume.size > 5 * 1024 * 1024) {
@@ -187,24 +194,15 @@ export const resumeReview = async (req, res) => {
         let dbType;
 
         if (analysisType === 'ats') {
-            prompt = `Analyze this resume for ATS (Applicant Tracking System) compatibility and provide a detailed assessment:
-
-1. **ATS Score**: Give an overall ATS compatibility score (0-100)
-2. **Formatting Issues**: Identify any formatting problems that might cause ATS parsing errors
-3. **Keyword Optimization**: Assess keyword usage and suggest improvements
-4. **Structure Analysis**: Evaluate section organization and heading clarity
-5. **File Format Compatibility**: Comment on PDF structure and readability
-6. **Recommendations**: Provide specific actionable steps to improve ATS compatibility
-
-Resume Content: \n\n${pdfData.text}`;
+            prompt = `Analyze this resume for ATS compatibility and provide a detailed assessment with score, formatting issues, keyword optimization, structure analysis, and recommendations.\n\nResume:\n${pdfData.text}`;
             dbType = 'ats-check';
         } else {
-            prompt = `Review the following resume and provide constructive feedback on its strengths, weaknesses, and areas for improvement.Resume Content: \n\n${pdfData.text}`;
+            prompt = `Review the following resume and provide constructive feedback on strengths, weaknesses, and improvements.\n\nResume:\n${pdfData.text}`;
             dbType = 'resume-review';
         }
 
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: TEXT_MODEL,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 3000,
@@ -215,7 +213,7 @@ Resume Content: \n\n${pdfData.text}`;
         await sql`INSERT INTO creations (user_id, prompt, content, type) 
         VALUES (${userId}, ${analysisType === 'ats' ? 'ATS compatibility check for uploaded resume' : 'Review the uploaded resume'}, ${content}, ${dbType})`;
 
-        res.json({ success: 'true', content: content })
+        res.json({ success: 'true', content })
 
     } catch (error) {
         console.log(error.message)
@@ -228,11 +226,9 @@ export const generateCode = async (req, res) => {
         const { userId } = req.auth();
         const { prompt } = req.body;
 
-        const codePrompt = `Generate code based on this request: ${prompt}. Only return the code with minimal explanation.`;
-
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [{ role: "user", content: codePrompt }],
+            model: TEXT_MODEL,
+            messages: [{ role: "user", content: `Generate code based on this request: ${prompt}. Only return the code with minimal explanation.` }],
             temperature: 0.3,
             max_tokens: 3000,
         });
@@ -250,22 +246,107 @@ export const generateCode = async (req, res) => {
     }
 }
 
+// Upload image for chat (returns Cloudinary URL)
+export const uploadChatImage = async (req, res) => {
+    try {
+        const image = req.file;
+        if (!image) return res.json({ success: false, message: 'No image provided' });
+        const { secure_url } = await cloudinary.uploader.upload(image.path);
+        res.json({ success: true, url: secure_url });
+    } catch (error) {
+        console.log(error.message)
+        res.json({ success: false, message: error.message });
+    }
+}
+
+// Upload file for chat — extracts text from PDF, Word, TXT, CSV
+export const uploadChatFile = async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) return res.json({ success: false, message: 'No file provided' });
+
+        let text = '';
+        const mime = file.mimetype;
+
+        if (mime === 'application/pdf') {
+            const dataBuffer = fs.readFileSync(file.path);
+            const pdfData = await pdf(dataBuffer);
+            text = pdfData.text;
+
+        } else if (mime === 'application/msword' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+            const result = await mammoth.extractRawText({ path: file.path });
+            text = result.value;
+
+        } else if (mime === 'text/plain' || mime === 'text/csv') {
+            text = fs.readFileSync(file.path, 'utf-8');
+
+        } else if (mime === 'application/vnd.ms-excel' || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+            // For Excel, read as text (basic support)
+            text = fs.readFileSync(file.path, 'utf-8');
+
+        } else {
+            return res.json({ success: false, message: 'Unsupported file type' });
+        }
+
+        // Truncate if too long (keep first ~8000 chars to stay within token limits)
+        if (text.length > 8000) {
+            text = text.slice(0, 8000) + '\n\n[Document truncated due to length...]';
+        }
+
+        if (!text.trim()) {
+            return res.json({ success: false, message: 'Could not extract text from this file' });
+        }
+
+        res.json({ success: true, text, fileName: file.originalname });
+
+    } catch (error) {
+        console.log(error.message)
+        res.json({ success: false, message: error.message });
+    }
+}
+
 export const aiChat = async (req, res) => {
     try {
         const { userId } = req.auth();
-        const { prompt, sessionId, messages = [] } = req.body;
+        const { prompt, sessionId, messages = [], imageUrl, fileText, fileName } = req.body;
 
-        // Build full conversation history
-        const conversationHistory = messages.map(m => ({ role: m.role, content: m.content }))
+        const conversationHistory = messages.map(m => {
+            if (m.imageUrl) {
+                return {
+                    role: m.role,
+                    content: [
+                        { type: "text", text: m.content || '' },
+                        { type: "image_url", image_url: { url: m.imageUrl } }
+                    ]
+                }
+            }
+            return { role: m.role, content: m.content }
+        })
 
-        // Add current message if not already last
+        // Build current user message
         const lastMsg = conversationHistory[conversationHistory.length - 1]
         if (!lastMsg || lastMsg.content !== prompt) {
-            conversationHistory.push({ role: 'user', content: prompt })
+            if (imageUrl) {
+                conversationHistory.push({
+                    role: 'user',
+                    content: [
+                        { type: "text", text: prompt || 'What is in this image?' },
+                        { type: "image_url", image_url: { url: imageUrl } }
+                    ]
+                })
+            } else if (fileText) {
+                // Inject file content into prompt
+                const filePrompt = `The user has uploaded a file called "${fileName || 'document'}".\n\nFile contents:\n${fileText}\n\nUser question: ${prompt || 'Please analyze this document.'}`
+                conversationHistory.push({ role: 'user', content: filePrompt })
+            } else {
+                conversationHistory.push({ role: 'user', content: prompt })
+            }
         }
 
+        const hasImage = imageUrl || messages.some(m => m.imageUrl)
+
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: hasImage ? VISION_MODEL : TEXT_MODEL,
             messages: conversationHistory,
             temperature: 0.7,
             max_tokens: 3000,
@@ -273,25 +354,21 @@ export const aiChat = async (req, res) => {
 
         const content = response.choices[0].message.content
 
-        // Create new session or use existing
         let activeSessionId = sessionId
         if (!activeSessionId) {
+            const title = prompt || fileName || 'Document analysis'
             const newSession = await sql`
                 INSERT INTO chat_sessions (user_id, title) 
-                VALUES (${userId}, ${prompt.slice(0, 50)})
+                VALUES (${userId}, ${title.slice(0, 50)})
                 RETURNING id
             `
             activeSessionId = newSession[0].id
         }
 
-        // Save user message and AI response to DB
-        await sql`INSERT INTO chat_messages (session_id, role, content) 
-            VALUES (${activeSessionId}, 'user', ${prompt})`
-        await sql`INSERT INTO chat_messages (session_id, role, content) 
-            VALUES (${activeSessionId}, 'assistant', ${content})`
-
-        await sql`INSERT INTO creations (user_id, prompt, content, type) 
-            VALUES (${userId}, ${prompt}, ${content}, 'ai-chat')`;
+        const userPromptForDb = prompt || (fileName ? `Uploaded: ${fileName}` : 'Image analysis')
+        await sql`INSERT INTO chat_messages (session_id, role, content) VALUES (${activeSessionId}, 'user', ${userPromptForDb})`
+        await sql`INSERT INTO chat_messages (session_id, role, content) VALUES (${activeSessionId}, 'assistant', ${content})`
+        await sql`INSERT INTO creations (user_id, prompt, content, type) VALUES (${userId}, ${userPromptForDb}, ${content}, 'ai-chat')`;
 
         res.json({ success: true, content, sessionId: activeSessionId })
 
@@ -316,38 +393,10 @@ export const resumeJobMatcher = async (req, res) => {
         const dataBuffer = fs.readFileSync(resume.path)
         const pdfData = await pdf(dataBuffer)
 
-        const prompt = `You are an expert ATS and career coach. Analyze this resume against the job description and provide a detailed match report.
-
-Resume:
-${pdfData.text}
-
-Job Description:
-${jobDescription}
-
-Provide your analysis in this exact format:
-
-## Match Score: [X/100]
-
-## Why This Score
-[2-3 sentences explaining the score]
-
-## ✅ Strong Matches
-[List skills/experience the candidate has that match the JD]
-
-## ❌ Missing Keywords
-[List important keywords/skills from JD that are missing in resume]
-
-## ⚠️ Partially Matched
-[List things that are close but not exact matches]
-
-## 📝 Tailored Cover Letter
-[Write a personalized cover letter using details from both the resume and job description. Make it specific, not generic.]
-
-## 🎯 Quick Wins to Improve Score
-[3-5 specific changes to make to the resume to increase match score]`
+        const prompt = `You are an expert ATS and career coach. Analyze this resume against the job description.\n\nResume:\n${pdfData.text}\n\nJob Description:\n${jobDescription}\n\nProvide: Match Score, Strong Matches, Missing Keywords, Partially Matched, Tailored Cover Letter, Quick Wins.`
 
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: TEXT_MODEL,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 3000,
@@ -383,45 +432,11 @@ export const screenshotToBugReport = async (req, res) => {
         const { secure_url } = await cloudinary.uploader.upload(image.path)
 
         const prompt = `You are a senior QA engineer. Analyze this UI screenshot and generate a professional bug report.
-
 ${appContext ? `App Context: ${appContext}` : ''}
-
-Generate a detailed bug report in this exact format:
-
-## 🐛 Bug Title
-[A clear, concise title for this bug]
-
-## Severity
-[Critical / High / Medium / Low] — [One line reason]
-
-## 📋 Description
-[Clear description of what the bug is]
-
-## 🔁 Steps to Reproduce
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
-[Add more steps as needed]
-
-## ✅ Expected Behavior
-[What should have happened]
-
-## ❌ Actual Behavior
-[What actually happened based on the screenshot]
-
-## 🌍 Environment
-- Browser: [If visible or Unknown]
-- Device: [If visible or Unknown]
-- Screen: [Describe what's visible]
-
-## 💡 Suggested Fix
-[Technical suggestion for how to fix this bug]
-
-## 📎 Additional Notes
-[Any other observations from the screenshot]`
+Format: Bug Title, Severity, Description, Steps to Reproduce, Expected Behavior, Actual Behavior, Environment, Suggested Fix, Additional Notes.`
 
         const response = await AI.chat.completions.create({
-            model: "meta-llama/llama-4-scout-17b-16e-instruct",
+            model: VISION_MODEL,
             messages: [{
                 role: "user",
                 content: [
@@ -455,14 +470,9 @@ Generate a detailed bug report in this exact format:
 export const getChatSessions = async (req, res) => {
     try {
         const { userId } = req.auth();
-        const sessions = await sql`
-            SELECT * FROM chat_sessions 
-            WHERE user_id = ${userId} 
-            ORDER BY created_at DESC
-        `;
+        const sessions = await sql`SELECT * FROM chat_sessions WHERE user_id = ${userId} ORDER BY created_at DESC`;
         res.json({ success: true, sessions })
     } catch (error) {
-        console.log(error.message)
         res.json({ success: false, message: error.message })
     }
 }
@@ -471,20 +481,11 @@ export const getChatMessages = async (req, res) => {
     try {
         const { userId } = req.auth();
         const { sessionId } = req.params;
-
-        const session = await sql`
-            SELECT * FROM chat_sessions WHERE id = ${sessionId} AND user_id = ${userId}
-        `
+        const session = await sql`SELECT * FROM chat_sessions WHERE id = ${sessionId} AND user_id = ${userId}`
         if (session.length === 0) return res.json({ success: false, message: 'Session not found' })
-
-        const messages = await sql`
-            SELECT role, content FROM chat_messages 
-            WHERE session_id = ${sessionId} 
-            ORDER BY created_at ASC
-        `
+        const messages = await sql`SELECT role, content FROM chat_messages WHERE session_id = ${sessionId} ORDER BY created_at ASC`
         res.json({ success: true, messages })
     } catch (error) {
-        console.log(error.message)
         res.json({ success: false, message: error.message })
     }
 }
@@ -493,13 +494,10 @@ export const deleteChatSession = async (req, res) => {
     try {
         const { userId } = req.auth();
         const { sessionId } = req.params;
-
         await sql`DELETE FROM chat_messages WHERE session_id = ${sessionId}`
         await sql`DELETE FROM chat_sessions WHERE id = ${sessionId} AND user_id = ${userId}`
-
         res.json({ success: true })
     } catch (error) {
-        console.log(error.message)
         res.json({ success: false, message: error.message })
     }
 }
@@ -509,35 +507,21 @@ export const renameChatSession = async (req, res) => {
         const { userId } = req.auth();
         const { sessionId } = req.params;
         const { title } = req.body;
-
-        await sql`
-            UPDATE chat_sessions SET title = ${title} 
-            WHERE id = ${sessionId} AND user_id = ${userId}
-        `
+        await sql`UPDATE chat_sessions SET title = ${title} WHERE id = ${sessionId} AND user_id = ${userId}`
         res.json({ success: true })
     } catch (error) {
-        console.log(error.message)
         res.json({ success: false, message: error.message })
     }
 }
+
 export const deleteCreation = async (req, res) => {
     try {
         const { userId } = req.auth();
         const { id } = req.params;
-
-        const result = await sql`
-            DELETE FROM creations 
-            WHERE id = ${id} AND user_id = ${userId}
-            RETURNING id
-        `;
-
-        if (result.length === 0) {
-            return res.json({ success: false, message: "Creation not found or unauthorized" });
-        }
-
+        const result = await sql`DELETE FROM creations WHERE id = ${id} AND user_id = ${userId} RETURNING id`;
+        if (result.length === 0) return res.json({ success: false, message: "Creation not found or unauthorized" });
         res.json({ success: true });
     } catch (error) {
-        console.log(error.message);
         res.json({ success: false, message: error.message });
     }
 }

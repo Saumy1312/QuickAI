@@ -2,21 +2,11 @@ import express from "express";
 import { auth } from "../middlewares/auth.js";
 import { upload } from "../configs/multer.js";
 import {
-  generateArticle,
-  generateBlogTitle,
-  generateImage,
-  removeImageBackground,
-  removeImageObject,
-  resumeReview,
-  generateCode,
-  aiChat,
-  resumeJobMatcher,
-  screenshotToBugReport,
-  getChatSessions,
-  getChatMessages,
-  deleteChatSession,
-  renameChatSession,
-  deleteCreation
+  generateArticle, generateBlogTitle, generateImage,
+  removeImageBackground, removeImageObject, resumeReview,
+  generateCode, aiChat, resumeJobMatcher, screenshotToBugReport,
+  getChatSessions, getChatMessages, deleteChatSession, renameChatSession,
+  deleteCreation, uploadChatImage, uploadChatFile
 } from "../controllers/aiController.js";
 
 const aiRouter = express.Router();
@@ -31,9 +21,10 @@ aiRouter.post('/generate-code', auth, generateCode)
 aiRouter.post('/ai-chat', auth, aiChat)
 aiRouter.post('/resume-job-match', upload.single('resume'), auth, resumeJobMatcher)
 aiRouter.post('/screenshot-bug-report', upload.single('image'), auth, screenshotToBugReport)
+aiRouter.post('/upload-chat-image', upload.single('image'), auth, uploadChatImage)
+aiRouter.post('/upload-chat-file', upload.single('file'), auth, uploadChatFile)
 aiRouter.delete('/delete-creation/:id', auth, deleteCreation)
 
-// Chat session routes
 aiRouter.get('/chat-sessions', auth, getChatSessions)
 aiRouter.get('/chat-messages/:sessionId', auth, getChatMessages)
 aiRouter.delete('/chat-sessions/:sessionId', auth, deleteChatSession)
