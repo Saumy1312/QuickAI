@@ -217,53 +217,127 @@ const TitleCard = ({ title, index }) => {
   )
 }
 
+// ── SEO helpers ───────────────────────────────────────────────
+const extractSection = (content, header) => {
+  if (!content) return ''
+  const regex = new RegExp(`##\\s*${header}([\\s\\S]*?)(?=##|$)`, 'i')
+  const match = content.match(regex)
+  return match ? match[1].trim() : ''
+}
+
+const parseScore = (content) => {
+  if (!content) return null
+  // match any standalone 1-3 digit number in the SEO Score section
+  const section = extractSection(content, 'SEO Score')
+  const m = section.match(/\b(\d{1,3})\b/)
+  return m ? Math.min(100, parseInt(m[1])) : null
+}
+
+const SeoCard = ({ icon, title, children, accent = 'white' }) => {
+  const colors = {
+    green:  'border-green-500/20 bg-green-500/5',
+    amber:  'border-amber-500/20 bg-amber-500/5',
+    red:    'border-red-500/20 bg-red-500/5',
+    blue:   'border-blue-500/20 bg-blue-500/5',
+    purple: 'border-purple-500/20 bg-purple-500/5',
+    white:  'border-white/10 bg-white/3',
+  }
+  return (
+    <div className={`rounded-xl border p-4 ${colors[accent]}`}>
+      <p className='text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5'>
+        <span>{icon}</span>{title}
+      </p>
+      {children}
+    </div>
+  )
+}
+
+const TagChip = ({ tag }) => (
+  <span className='px-2 py-1 rounded-lg bg-white/8 border border-white/10 text-xs text-gray-300'>{tag.trim()}</span>
+)
+
 // ── SEO Analysis Tab ──────────────────────────────────────────
 const SEOTab = ({ prefillArticle, prefillTopic }) => {
   const [article, setArticle]          = useState(prefillArticle || '')
   const [topic, setTopic]              = useState(prefillTopic || '')
   const { loading, content, generate } = useGenerateText('/api/ai/generate-article', 'seo-analysis-content')
+  const { copied, copy }               = useCopyToClipboard()
 
   const onSubmit = async (e) => {
     e.preventDefault()
     await generate({
-      prompt: `You are an SEO expert. Analyse the following article and provide a detailed SEO report.
+      prompt: `You are an SEO expert. Analyse this article and return a structured SEO report.
 
-Topic/Keyword: "${topic}"
+Target Keyword: "${topic}"
 
 Article:
 ${article}
 
-Return your analysis in this EXACT format with these EXACT section headers:
+Return EXACTLY this structure, with EXACTLY these ## headers. Under SEO Score, write the number as just digits like "Score: 74":
 
 ## SEO Score
-Give a score out of 100 and a one-line verdict.
+Score: [number 0-100]. [One sentence verdict].
 
 ## Meta Description
-Write an optimised meta description (150-160 characters).
+[150-160 character meta description]
 
 ## Focus Keywords
-List 5-8 primary and secondary keywords found or that should be added.
+- keyword 1
+- keyword 2
+- keyword 3
+- keyword 4
+- keyword 5
 
 ## Strengths
-List 3-5 SEO strengths of this article.
+- strength 1
+- strength 2
+- strength 3
 
 ## Issues Found
-List any SEO problems (missing keywords, poor structure, thin content, etc).
+- issue 1
+- issue 2
+- issue 3
 
 ## Quick Wins
-List 3-5 specific actionable improvements to boost SEO immediately.
+- quick win 1
+- quick win 2
+- quick win 3
 
 ## Suggested Tags
-Comma-separated list of 8-10 blog tags for this article.`,
-      length: 1200
+tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8`,
+      length: 1000
     })
   }
 
-  // Parse score from content
-  const scoreMatch = content?.match(/##\s*SEO Score[\s\S]*?(\d+)\s*\/\s*100/)
-  const score = scoreMatch ? parseInt(scoreMatch[1]) : null
-  const scoreColor = score >= 75 ? 'text-green-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'
-  const scoreBg    = score >= 75 ? 'bg-green-500/10 border-green-500/30' : score >= 50 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-red-500/10 border-red-500/30'
+  const score       = parseScore(content)
+  const metaDesc    = extractSection(content, 'Meta Description')
+  const keywords    = extractSection(content, 'Focus Keywords')
+  const strengths   = extractSection(content, 'Strengths')
+  const issues      = extractSection(content, 'Issues Found')
+  const quickWins   = extractSection(content, 'Quick Wins')
+  const tagsRaw     = extractSection(content, 'Suggested Tags')
+  const tags        = tagsRaw ? tagsRaw.split(',').filter(Boolean) : []
+
+  const scoreColor  = !score ? '' : score >= 75 ? 'text-green-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'
+  const scoreBorder = !score ? 'border-white/10' : score >= 75 ? 'border-green-500/40' : score >= 50 ? 'border-amber-500/40' : 'border-red-500/40'
+  const scoreBg     = !score ? '' : score >= 75 ? 'bg-green-500/10' : score >= 50 ? 'bg-amber-500/10' : 'bg-red-500/10'
+  const scoreLabel  = !score ? '' : score >= 75 ? 'Well optimised 🎉' : score >= 50 ? 'Good — room to improve' : 'Needs work — check quick wins'
+
+  const BulletList = ({ text }) => {
+    if (!text) return null
+    const items = text.split('\n').filter(l => l.trim().match(/^[-•*]|\d+\./))
+    if (items.length === 0) return <p className='text-sm text-gray-300'>{text}</p>
+    return (
+      <ul className='flex flex-col gap-1.5'>
+        {items.map((item, i) => (
+          <li key={i} className='flex gap-2 text-sm text-gray-300'>
+            <span className='text-gray-600 mt-0.5 flex-shrink-0'>•</span>
+            <span>{item.replace(/^[-•*]\s*|\d+\.\s*/, '')}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
 
   return (
     <div className='flex flex-col h-full'>
@@ -273,7 +347,7 @@ Comma-separated list of 8-10 blog tags for this article.`,
             placeholder='Target keyword / topic...'
             className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors' />
           <textarea value={article} onChange={e => setArticle(e.target.value)} required rows={3}
-            placeholder='Paste your article here (or generate one from the Write Article tab and click "Analyse SEO")...'
+            placeholder='Paste your article here, or generate one and click "Analyse SEO"...'
             className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors resize-none' />
           <button disabled={loading}
             className='flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 text-white text-sm font-medium disabled:opacity-50'>
@@ -289,24 +363,88 @@ Comma-separated list of 8-10 blog tags for this article.`,
           <div className='flex flex-col items-center justify-center h-full text-gray-700 gap-3'>
             <Search className='w-10 h-10 opacity-20' />
             <p className='text-sm text-center'>Paste an article and click Analyse SEO</p>
-            <p className='text-xs text-gray-600 text-center'>Or generate an article first and click the "Analyse SEO" button</p>
+            <p className='text-xs text-gray-600 text-center'>Or generate one in Write Article and click "Analyse SEO"</p>
           </div>
         ) : (
-          <div className='flex flex-col gap-4'>
+          <div className='flex flex-col gap-3 pb-6'>
+
             {/* Score card */}
             {score && (
-              <div className={`flex items-center gap-4 p-4 rounded-xl border ${scoreBg}`}>
-                <div className={`text-4xl font-bold ${scoreColor}`}>{score}<span className='text-lg text-gray-500'>/100</span></div>
+              <div className={`flex items-center gap-5 p-5 rounded-xl border ${scoreBorder} ${scoreBg}`}>
+                <div className='flex-shrink-0 relative w-20 h-20'>
+                  <svg className='w-20 h-20 -rotate-90' viewBox='0 0 36 36'>
+                    <circle cx='18' cy='18' r='15.9' fill='none' stroke='rgba(255,255,255,0.05)' strokeWidth='3' />
+                    <circle cx='18' cy='18' r='15.9' fill='none'
+                      stroke={score >= 75 ? '#4ade80' : score >= 50 ? '#fbbf24' : '#f87171'}
+                      strokeWidth='3' strokeLinecap='round'
+                      strokeDasharray={`${score} 100`} />
+                  </svg>
+                  <div className='absolute inset-0 flex items-center justify-center'>
+                    <span className={`text-xl font-bold ${scoreColor}`}>{score}</span>
+                  </div>
+                </div>
                 <div>
-                  <p className='text-sm font-medium text-white'>SEO Score</p>
-                  <p className='text-xs text-gray-400'>{score >= 75 ? 'Great — well optimised' : score >= 50 ? 'Good — some improvements needed' : 'Needs work — follow the quick wins below'}</p>
+                  <p className='text-white font-semibold text-base'>SEO Score</p>
+                  <p className={`text-sm ${scoreColor} font-medium`}>{scoreLabel}</p>
+                  <p className='text-xs text-gray-500 mt-0.5'>out of 100</p>
                 </div>
               </div>
             )}
-            {/* Full report */}
-            <div className='bg-[#0F0F12] rounded-xl border border-white/10 p-4'>
-              <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{content}</Markdown></div>
+
+            {/* Meta description */}
+            {metaDesc && (
+              <SeoCard icon='📝' title='Meta Description' accent='blue'>
+                <p className='text-sm text-gray-200 leading-relaxed'>{metaDesc}</p>
+                <div className='flex items-center justify-between mt-2'>
+                  <span className={`text-xs ${metaDesc.length > 160 ? 'text-red-400' : 'text-gray-500'}`}>
+                    {metaDesc.length} chars {metaDesc.length > 160 ? '(too long)' : '(good)'}
+                  </span>
+                  <button onClick={() => copy(metaDesc)}
+                    className='flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors'>
+                    {copied ? <Check className='w-3 h-3 text-green-400' /> : <Copy className='w-3 h-3' />}
+                    Copy
+                  </button>
+                </div>
+              </SeoCard>
+            )}
+
+            {/* 2-col grid for keywords + tags */}
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+              {keywords && (
+                <SeoCard icon='🔑' title='Focus Keywords' accent='purple'>
+                  <BulletList text={keywords} />
+                </SeoCard>
+              )}
+              {tags.length > 0 && (
+                <SeoCard icon='🏷️' title='Suggested Tags' accent='purple'>
+                  <div className='flex flex-wrap gap-1.5'>
+                    {tags.map((tag, i) => <TagChip key={i} tag={tag} />)}
+                  </div>
+                </SeoCard>
+              )}
             </div>
+
+            {/* Strengths */}
+            {strengths && (
+              <SeoCard icon='✅' title='Strengths' accent='green'>
+                <BulletList text={strengths} />
+              </SeoCard>
+            )}
+
+            {/* Issues */}
+            {issues && (
+              <SeoCard icon='⚠️' title='Issues Found' accent='red'>
+                <BulletList text={issues} />
+              </SeoCard>
+            )}
+
+            {/* Quick wins */}
+            {quickWins && (
+              <SeoCard icon='⚡' title='Quick Wins' accent='amber'>
+                <BulletList text={quickWins} />
+              </SeoCard>
+            )}
+
           </div>
         )}
       </div>
