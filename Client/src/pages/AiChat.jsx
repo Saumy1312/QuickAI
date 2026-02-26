@@ -1,4 +1,4 @@
-import { MessageCircle, Sparkles, Send, Plus, Pencil, Trash2, Check, X, Menu, Copy } from 'lucide-react'
+import { MessageCircle, Sparkles, Send, Plus, Pencil, Trash2, Check, X, Menu, Copy, Paperclip, FileText, Image } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useAuth } from '@clerk/clerk-react';
@@ -18,8 +18,12 @@ const AiChat = () => {
   const [showSidebar, setShowSidebar] = useState(false)
   const [loadingSession, setLoadingSession] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState(null)
+  const [attachment, setAttachment] = useState(null) // { type: 'image'|'file', preview, url, name, extractedText }
+  const [uploading, setUploading] = useState(false)
   const messagesEndRef = useRef(null)
   const scrollContainerRef = useRef(null)
+  const imageInputRef = useRef(null)
+  const fileInputRef = useRef(null)
   const { getToken } = useAuth()
 
   useEffect(() => { fetchSessions() }, [])
@@ -42,6 +46,70 @@ const AiChat = () => {
     const text = messages.map(m => `${m.role === 'user' ? 'You' : 'AI'}: ${m.content}`).join('\n\n')
     navigator.clipboard.writeText(text)
     toast.success('Conversation copied!')
+  }
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) return toast.error('Please select an image file')
+    const preview = URL.createObjectURL(file)
+    setAttachment({ type: 'image', preview, url: null, name: file.name })
+    try {
+      setUploading(true)
+      const formData = new FormData()
+      formData.append('image', file)
+      const { data } = await axios.post('/api/ai/upload-chat-image', formData, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      })
+      if (data.success) {
+        setAttachment({ type: 'image', preview, url: data.url, name: file.name })
+      } else {
+        toast.error('Image upload failed'); setAttachment(null)
+      }
+    } catch (e) { toast.error('Upload failed'); setAttachment(null) }
+    setUploading(false)
+  }
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ]
+    if (!allowed.includes(file.type)) {
+      return toast.error('Supported: PDF, Word, TXT, CSV, Excel')
+    }
+    if (file.size > 10 * 1024 * 1024) return toast.error('File must be under 10MB')
+
+    setAttachment({ type: 'file', name: file.name, url: null, extractedText: null })
+    try {
+      setUploading(true)
+      const formData = new FormData()
+      formData.append('file', file)
+      const { data } = await axios.post('/api/ai/upload-chat-file', formData, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      })
+      if (data.success) {
+        setAttachment({ type: 'file', name: file.name, url: null, extractedText: data.text })
+        toast.success('File ready!')
+      } else {
+        toast.error(data.message); setAttachment(null)
+      }
+    } catch (e) { toast.error('Upload failed'); setAttachment(null) }
+    setUploading(false)
+  }
+
+  const removeAttachment = () => {
+    setAttachment(null)
+    if (imageInputRef.current) imageInputRef.current.value = ''
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const fetchSessions = async () => {
@@ -71,10 +139,8 @@ const AiChat = () => {
   }
 
   const startNewChat = () => {
-    setMessages([])
-    setCurrentSessionId(null)
-    setInput('')
-    setShowSidebar(false)
+    setMessages([]); setCurrentSessionId(null)
+    setInput(''); setAttachment(null); setShowSidebar(false)
   }
 
   const deleteSession = async (e, id) => {
@@ -89,11 +155,7 @@ const AiChat = () => {
     } catch (e) { toast.error(e.message) }
   }
 
-  const startRename = (e, s) => {
-    e.stopPropagation()
-    setEditingId(s.id)
-    setEditingTitle(s.title)
-  }
+  const startRename = (e, s) => { e.stopPropagation(); setEditingId(s.id); setEditingTitle(s.title) }
 
   const saveRename = async (e, id) => {
     e.stopPropagation()
@@ -102,32 +164,43 @@ const AiChat = () => {
         headers: { Authorization: `Bearer ${await getToken()}` }
       })
       setSessions(prev => prev.map(s => s.id === id ? { ...s, title: editingTitle } : s))
-      setEditingId(null)
-      toast.success('Renamed!')
+      setEditingId(null); toast.success('Renamed!')
     } catch (e) { toast.error(e.message) }
   }
 
   const onSubmitHandler = async (e) => {
     e.preventDefault()
-    if (!input.trim()) return
-    const userMessage = { role: 'user', content: input }
+    if (!input.trim() && !attachment) return
+    if (attachment && !attachment.url && !attachment.extractedText) return toast.error('Still uploading, please wait')
+
+    const userMessage = {
+      role: 'user',
+      content: input,
+      imageUrl: attachment?.type === 'image' ? attachment.url : null,
+      fileName: attachment?.type === 'file' ? attachment.name : null,
+    }
     setMessages(prev => [...prev, userMessage])
-    setInput('')
+    const currentInput = input
+    const currentAttachment = attachment
+    setInput(''); setAttachment(null)
+    if (imageInputRef.current) imageInputRef.current.value = ''
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+
     try {
       setLoading(true)
       const { data } = await axios.post('/api/ai/ai-chat', {
-        prompt: input,
+        prompt: currentInput,
         sessionId: currentSessionId,
-        messages: [...messages, userMessage]
+        messages: [...messages, userMessage],
+        imageUrl: currentAttachment?.type === 'image' ? currentAttachment.url : null,
+        fileText: currentAttachment?.type === 'file' ? currentAttachment.extractedText : null,
+        fileName: currentAttachment?.type === 'file' ? currentAttachment.name : null,
       }, { headers: { Authorization: `Bearer ${await getToken()}` } })
 
       if (data.success) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
-        if (!currentSessionId) {
-          setCurrentSessionId(data.sessionId)
-          fetchSessions()
-        }
+        if (!currentSessionId) { setCurrentSessionId(data.sessionId); fetchSessions() }
       } else {
         toast.error(data.message)
         setMessages(prev => prev.slice(0, -1))
@@ -137,6 +210,17 @@ const AiChat = () => {
       setMessages(prev => prev.slice(0, -1))
     }
     setLoading(false)
+  }
+
+  const getFileIcon = (name) => {
+    if (!name) return '📄'
+    const ext = name.split('.').pop().toLowerCase()
+    if (ext === 'pdf') return '📕'
+    if (['doc', 'docx'].includes(ext)) return '📘'
+    if (['xls', 'xlsx'].includes(ext)) return '📗'
+    if (ext === 'csv') return '📊'
+    if (ext === 'txt') return '📝'
+    return '📄'
   }
 
   const SessionList = () => (
@@ -181,7 +265,7 @@ const AiChat = () => {
         <SessionList />
       </div>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar */}
       {showSidebar && (
         <div className='sm:hidden fixed inset-0 z-50 flex'>
           <div className='w-72 bg-[#0F0F12] border-r border-white/10 flex flex-col p-3 gap-2'>
@@ -196,6 +280,7 @@ const AiChat = () => {
 
       {/* Main */}
       <div className='flex-1 flex flex-col overflow-hidden min-w-0'>
+        {/* Header */}
         <div className='flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#0F0F12] flex-shrink-0'>
           <button onClick={() => setShowSidebar(true)} className='sm:hidden text-gray-400 hover:text-white'>
             <Menu className='w-5 h-5' />
@@ -204,25 +289,33 @@ const AiChat = () => {
             <Sparkles className='w-3.5 h-3.5 text-purple-400' />
           </div>
           <h1 className='text-base font-semibold'>AI Assistant</h1>
+          <div className='ml-2 flex items-center gap-2 text-xs text-gray-600'>
+            <span className='flex items-center gap-1'><Image className='w-3 h-3' /> Images</span>
+            <span className='flex items-center gap-1'><FileText className='w-3 h-3' /> PDF/Docs</span>
+          </div>
           {messages.length > 0 && (
             <div className='ml-auto flex items-center gap-2'>
-              {/* Copy full conversation */}
               <button onClick={copyFullConversation}
                 className='flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-gray-400 transition-colors'>
                 <Copy className='w-3.5 h-3.5' /> Copy all
               </button>
-              <button onClick={startNewChat} className='text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors'>
+              <button onClick={startNewChat} className='text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1'>
                 <Plus className='w-3.5 h-3.5' /> New
               </button>
             </div>
           )}
         </div>
 
+        {/* Messages */}
         <div ref={scrollContainerRef} className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
           {messages.length === 0 && (
             <div className='flex-1 flex flex-col justify-center items-center text-gray-600 gap-3 h-full'>
               <MessageCircle className='w-10 h-10 opacity-20' />
-              <p className='text-sm text-center px-4'>Ask me anything and I'll help you out!</p>
+              <p className='text-sm text-center'>Ask me anything, upload an image, or share a document!</p>
+              <div className='flex items-center gap-4 text-xs text-gray-700'>
+                <span className='flex items-center gap-1'><Image className='w-3 h-3' /> Images</span>
+                <span className='flex items-center gap-1'><FileText className='w-3 h-3' /> PDF, Word, Excel, TXT</span>
+              </div>
             </div>
           )}
           {messages.map((msg, i) => (
@@ -230,12 +323,19 @@ const AiChat = () => {
               <div className={`group relative max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
                 ? 'bg-purple-600/20 border border-purple-500/30 text-purple-100 rounded-br-sm'
                 : 'bg-[#0F0F12] border border-white/10 text-gray-300 rounded-bl-sm'}`}>
+                {msg.imageUrl && (
+                  <img src={msg.imageUrl} alt="attached" className='w-full max-w-xs rounded-lg mb-2 border border-white/10' />
+                )}
+                {msg.fileName && (
+                  <div className='flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2 mb-2'>
+                    <span className='text-lg'>{getFileIcon(msg.fileName)}</span>
+                    <span className='text-xs text-gray-300 truncate'>{msg.fileName}</span>
+                  </div>
+                )}
                 {msg.role === 'assistant'
                   ? <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{msg.content}</Markdown></div>
                   : msg.content}
-                {/* Copy button per message */}
-                <button
-                  onClick={() => copyMessage(msg.content, i)}
+                <button onClick={() => copyMessage(msg.content, i)}
                   className='absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1a1a1f] border border-white/10 rounded-md p-1 text-gray-400 hover:text-white'>
                   {copiedIndex === i ? <Check className='w-3 h-3 text-green-400' /> : <Copy className='w-3 h-3' />}
                 </button>
@@ -254,11 +354,64 @@ const AiChat = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={onSubmitHandler} className='p-3 border-t border-white/10 bg-[#0F0F12] flex gap-2 flex-shrink-0'>
+        {/* Attachment preview */}
+        {attachment && (
+          <div className='px-3 py-2 bg-[#0F0F12] border-t border-white/5'>
+            <div className='relative inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2'>
+              {attachment.type === 'image' ? (
+                <>
+                  <img src={attachment.preview} alt="preview" className='h-10 w-10 object-cover rounded border border-white/10' />
+                  <span className='text-xs text-gray-400 max-w-[120px] truncate'>{attachment.name}</span>
+                </>
+              ) : (
+                <>
+                  <span className='text-xl'>{getFileIcon(attachment.name)}</span>
+                  <div>
+                    <p className='text-xs text-white truncate max-w-[150px]'>{attachment.name}</p>
+                    <p className='text-[10px] text-gray-500'>
+                      {uploading ? 'Extracting text...' : attachment.extractedText ? '✓ Ready' : 'Processing...'}
+                    </p>
+                  </div>
+                </>
+              )}
+              {uploading && (
+                <span className='w-3.5 h-3.5 border-2 border-t-transparent border-purple-400 rounded-full animate-spin'></span>
+              )}
+              <button onClick={removeAttachment}
+                className='w-4 h-4 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-400 ml-1'>
+                <X className='w-2.5 h-2.5 text-white' />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Input bar */}
+        <form onSubmit={onSubmitHandler} className='p-3 border-t border-white/10 bg-[#0F0F12] flex gap-2 flex-shrink-0 items-center'>
+          {/* Image attach */}
+          <button type='button' onClick={() => imageInputRef.current?.click()}
+            title='Attach image'
+            className='flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white transition-colors flex-shrink-0'>
+            <Image className='w-4 h-4' />
+          </button>
+          <input ref={imageInputRef} type='file' accept='image/*' onChange={handleImageSelect} className='hidden' />
+
+          {/* File attach */}
+          <button type='button' onClick={() => fileInputRef.current?.click()}
+            title='Attach PDF, Word, Excel, TXT'
+            className='flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white transition-colors flex-shrink-0'>
+            <Paperclip className='w-4 h-4' />
+          </button>
+          <input ref={fileInputRef} type='file' accept='.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx' onChange={handleFileSelect} className='hidden' />
+
           <input type='text' value={input} onChange={e => setInput(e.target.value)}
-            placeholder='Ask me anything...'
-            className='flex-1 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-500 focus:border-purple-500/50 transition-colors min-w-0' required />
-          <button disabled={loading}
+            placeholder={
+              attachment?.type === 'image' ? 'Ask about this image...' :
+              attachment?.type === 'file' ? 'Ask about this document...' :
+              'Ask me anything...'
+            }
+            className='flex-1 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-500 focus:border-purple-500/50 transition-colors min-w-0' />
+
+          <button disabled={loading || uploading}
             className='flex items-center justify-center w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white transition-colors flex-shrink-0'>
             {loading ? <span className='w-4 h-4 rounded-full border-2 border-t-transparent animate-spin'></span> : <Send className='w-4 h-4' />}
           </button>
