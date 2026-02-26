@@ -12,7 +12,6 @@ import ReviewResume from './pages/ReviewResume'
 import Community from './pages/Community'
 import { Toaster } from 'react-hot-toast'
 import AiChat from './pages/AiChat.jsx'
-import ResumeJobMatcher from './pages/ResumeJobMatcher'
 import ScreenshotBugReport from './pages/ScreenshotBugReport'
 
 const App = () => {
@@ -29,7 +28,6 @@ const App = () => {
           <Route path='remove-background' element={<RemoveBackground />} />
           <Route path='remove-object' element={<RemoveObject />} />
           <Route path='review-resume' element={<ReviewResume />} />
-          <Route path='resume-job-matcher' element={<ResumeJobMatcher />} />
           <Route path='screenshot-bug-report' element={<ScreenshotBugReport />} />
           <Route path='community' element={<Community />} />
         </Route>
