@@ -1,4 +1,4 @@
-import { MessageCircle, Sparkles, Send, Plus, Pencil, Trash2, Check, X, Menu } from 'lucide-react'
+import { MessageCircle, Sparkles, Send, Plus, Pencil, Trash2, Check, X, Menu, Copy } from 'lucide-react'
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useAuth } from '@clerk/clerk-react';
@@ -17,6 +17,7 @@ const AiChat = () => {
   const [editingTitle, setEditingTitle] = useState('')
   const [showSidebar, setShowSidebar] = useState(false)
   const [loadingSession, setLoadingSession] = useState(false)
+  const [copiedIndex, setCopiedIndex] = useState(null)
   const messagesEndRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const { getToken } = useAuth()
@@ -29,6 +30,19 @@ const AiChat = () => {
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
     if (isNearBottom) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const copyMessage = (content, index) => {
+    navigator.clipboard.writeText(content)
+    setCopiedIndex(index)
+    toast.success('Copied!')
+    setTimeout(() => setCopiedIndex(null), 2000)
+  }
+
+  const copyFullConversation = () => {
+    const text = messages.map(m => `${m.role === 'user' ? 'You' : 'AI'}: ${m.content}`).join('\n\n')
+    navigator.clipboard.writeText(text)
+    toast.success('Conversation copied!')
+  }
 
   const fetchSessions = async () => {
     try {
@@ -110,7 +124,6 @@ const AiChat = () => {
 
       if (data.success) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
-        // If new session was created, update session list and set current
         if (!currentSessionId) {
           setCurrentSessionId(data.sessionId)
           fetchSessions()
@@ -192,9 +205,16 @@ const AiChat = () => {
           </div>
           <h1 className='text-base font-semibold'>AI Assistant</h1>
           {messages.length > 0 && (
-            <button onClick={startNewChat} className='ml-auto text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors'>
-              <Plus className='w-3.5 h-3.5' /> New
-            </button>
+            <div className='ml-auto flex items-center gap-2'>
+              {/* Copy full conversation */}
+              <button onClick={copyFullConversation}
+                className='flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-gray-400 transition-colors'>
+                <Copy className='w-3.5 h-3.5' /> Copy all
+              </button>
+              <button onClick={startNewChat} className='text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors'>
+                <Plus className='w-3.5 h-3.5' /> New
+              </button>
+            </div>
           )}
         </div>
 
@@ -207,12 +227,18 @@ const AiChat = () => {
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
+              <div className={`group relative max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
                 ? 'bg-purple-600/20 border border-purple-500/30 text-purple-100 rounded-br-sm'
                 : 'bg-[#0F0F12] border border-white/10 text-gray-300 rounded-bl-sm'}`}>
                 {msg.role === 'assistant'
                   ? <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{msg.content}</Markdown></div>
                   : msg.content}
+                {/* Copy button per message */}
+                <button
+                  onClick={() => copyMessage(msg.content, i)}
+                  className='absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1a1a1f] border border-white/10 rounded-md p-1 text-gray-400 hover:text-white'>
+                  {copiedIndex === i ? <Check className='w-3 h-3 text-green-400' /> : <Copy className='w-3 h-3' />}
+                </button>
               </div>
             </div>
           ))}

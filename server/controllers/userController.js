@@ -1,4 +1,5 @@
 import sql from "../configs/db.js";
+import { clerkClient } from "@clerk/express";
 
 export const getUserCreations = async (req, res) => {
     try {
@@ -21,7 +22,30 @@ export const getUserPublishedCreations = async (req, res) => {
             WHERE publish = true 
             ORDER BY created_at DESC
         `;
-        res.json({ success: true, creations });
+
+        // Fetch unique user info from Clerk in bulk
+        const uniqueUserIds = [...new Set(creations.map(c => c.user_id))];
+        const userMap = {};
+
+        await Promise.all(uniqueUserIds.map(async (uid) => {
+            try {
+                const user = await clerkClient.users.getUser(uid);
+                userMap[uid] = {
+                    name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Anonymous',
+                    avatar: user.imageUrl || null,
+                };
+            } catch {
+                userMap[uid] = { name: 'Anonymous', avatar: null };
+            }
+        }));
+
+        const enriched = creations.map(c => ({
+            ...c,
+            creator_name: userMap[c.user_id]?.name || 'Anonymous',
+            creator_avatar: userMap[c.user_id]?.avatar || null,
+        }));
+
+        res.json({ success: true, creations: enriched });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
@@ -40,7 +64,6 @@ export const toggleLikeCreations = async (req, res) => {
             return res.json({ success: false, message: "Creation not found" });
         }
 
-        // Ensure likes is always an array
         const currentLikes = Array.isArray(creation.likes) ? creation.likes : [];
         const userIdStr = String(userId);
 
@@ -55,7 +78,6 @@ export const toggleLikeCreations = async (req, res) => {
             message = "Creation Liked";
         }
 
-        // Save directly as a Postgres array
         await sql`
             UPDATE creations 
             SET likes = ${`{${updatedLikes.join(',')}}`}::text[] 
