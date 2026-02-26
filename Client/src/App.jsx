@@ -32,7 +32,6 @@ const App = () => {
         <Route path= '/ai' element= {<Layout />}>
           <Route index element= {<Dashboard />}/>
           <Route path="ai-chat" element={<AiChat />} />
-          <Route path="generate-code" element={<GenerateCode />} />
           <Route path='write-article' element= {<WriteArticle />}/>
           <Route path='generate-images' element= {<GenerateImages />}/>
           <Route path='remove-background' element= {<RemoveBackground />}/>
