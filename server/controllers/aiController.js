@@ -246,7 +246,6 @@ export const generateCode = async (req, res) => {
     }
 }
 
-// Upload image for chat (returns Cloudinary URL)
 export const uploadChatImage = async (req, res) => {
     try {
         const image = req.file;
@@ -259,7 +258,6 @@ export const uploadChatImage = async (req, res) => {
     }
 }
 
-// Upload file for chat — extracts text from PDF, Word, TXT, CSV
 export const uploadChatFile = async (req, res) => {
     try {
         const file = req.file;
@@ -281,14 +279,12 @@ export const uploadChatFile = async (req, res) => {
             text = fs.readFileSync(file.path, 'utf-8');
 
         } else if (mime === 'application/vnd.ms-excel' || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-            // For Excel, read as text (basic support)
             text = fs.readFileSync(file.path, 'utf-8');
 
         } else {
             return res.json({ success: false, message: 'Unsupported file type' });
         }
 
-        // Truncate if too long (keep first ~8000 chars to stay within token limits)
         if (text.length > 8000) {
             text = text.slice(0, 8000) + '\n\n[Document truncated due to length...]';
         }
@@ -328,7 +324,6 @@ export const aiChat = async (req, res) => {
             return { role: m.role, content: m.content }
         })]
 
-        // Build current user message — always push it
         if (imageUrl) {
             conversationHistory.push({
                 role: 'user',
@@ -526,3 +521,205 @@ export const deleteCreation = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 }
+
+// ─────────────────────────────────────────────
+//  NEW CLIPDROP FEATURES
+// ─────────────────────────────────────────────
+
+export const clipdropCleanup = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const plan = req.plan;
+
+        if (plan !== 'premium') {
+            return res.json({ success: false, message: "This feature is only available for premium subscription" });
+        }
+
+        const imageFile = req.files['image_file']?.[0];
+        const maskFile  = req.files['mask_file']?.[0];
+
+        if (!imageFile || !maskFile) {
+            return res.json({ success: false, message: "Both image and mask files are required" });
+        }
+
+        const formData = new FormData();
+        formData.append('image_file', fs.createReadStream(imageFile.path), {
+            filename: imageFile.originalname,
+            contentType: imageFile.mimetype,
+        });
+        formData.append('mask_file', fs.createReadStream(maskFile.path), {
+            filename: maskFile.originalname,
+            contentType: maskFile.mimetype,
+        });
+
+        const { data } = await axios.post('https://clipdrop-api.co/cleanup/v1', formData, {
+            headers: { 'x-api-key': process.env.CLIPDROP_API_KEY, ...formData.getHeaders() },
+            responseType: 'arraybuffer',
+        });
+
+        const base64Image = `data:image/png;base64,${Buffer.from(data).toString('base64')}`;
+        const { secure_url } = await cloudinary.uploader.upload(base64Image);
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+        VALUES (${userId}, 'Cleanup image', ${secure_url}, 'image')`;
+
+        res.json({ success: true, content: secure_url });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const clipdropRemoveText = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const plan = req.plan;
+
+        if (plan !== 'premium') {
+            return res.json({ success: false, message: "This feature is only available for premium subscription" });
+        }
+
+        const image = req.file;
+        if (!image) return res.json({ success: false, message: "Image is required" });
+
+        const formData = new FormData();
+        formData.append('image_file', fs.createReadStream(image.path), {
+            filename: image.originalname,
+            contentType: image.mimetype,
+        });
+
+        const { data } = await axios.post('https://clipdrop-api.co/remove-text/v1', formData, {
+            headers: { 'x-api-key': process.env.CLIPDROP_API_KEY, ...formData.getHeaders() },
+            responseType: 'arraybuffer',
+        });
+
+        const base64Image = `data:image/png;base64,${Buffer.from(data).toString('base64')}`;
+        const { secure_url } = await cloudinary.uploader.upload(base64Image);
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+        VALUES (${userId}, 'Remove text from image', ${secure_url}, 'image')`;
+
+        res.json({ success: true, content: secure_url });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const clipdropReplaceBackground = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { prompt } = req.body;
+        const plan = req.plan;
+
+        if (plan !== 'premium') {
+            return res.json({ success: false, message: "This feature is only available for premium subscription" });
+        }
+
+        const image = req.file;
+        if (!image || !prompt) return res.json({ success: false, message: "Image and prompt are required" });
+
+        const formData = new FormData();
+        formData.append('image_file', fs.createReadStream(image.path), {
+            filename: image.originalname,
+            contentType: image.mimetype,
+        });
+        formData.append('prompt', prompt);
+
+        const { data } = await axios.post('https://clipdrop-api.co/replace-background/v1', formData, {
+            headers: { 'x-api-key': process.env.CLIPDROP_API_KEY, ...formData.getHeaders() },
+            responseType: 'arraybuffer',
+        });
+
+        const base64Image = `data:image/png;base64,${Buffer.from(data).toString('base64')}`;
+        const { secure_url } = await cloudinary.uploader.upload(base64Image);
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+        VALUES (${userId}, ${`Replace background: ${prompt}`}, ${secure_url}, 'image')`;
+
+        res.json({ success: true, content: secure_url });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const clipdropUncrop = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { extend_left = 0, extend_right = 0, extend_up = 0, extend_down = 0 } = req.body;
+        const plan = req.plan;
+
+        if (plan !== 'premium') {
+            return res.json({ success: false, message: "This feature is only available for premium subscription" });
+        }
+
+        const image = req.file;
+        if (!image) return res.json({ success: false, message: "Image is required" });
+
+        const formData = new FormData();
+        formData.append('image_file', fs.createReadStream(image.path), {
+            filename: image.originalname,
+            contentType: image.mimetype,
+        });
+        formData.append('extend_left',  String(extend_left));
+        formData.append('extend_right', String(extend_right));
+        formData.append('extend_up',    String(extend_up));
+        formData.append('extend_down',  String(extend_down));
+
+        const { data } = await axios.post('https://clipdrop-api.co/uncrop/v1', formData, {
+            headers: { 'x-api-key': process.env.CLIPDROP_API_KEY, ...formData.getHeaders() },
+            responseType: 'arraybuffer',
+        });
+
+        const base64Image = `data:image/png;base64,${Buffer.from(data).toString('base64')}`;
+        const { secure_url } = await cloudinary.uploader.upload(base64Image);
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+        VALUES (${userId}, 'Uncrop image', ${secure_url}, 'image')`;
+
+        res.json({ success: true, content: secure_url });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const clipdropUpscale = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { target_width, target_height } = req.body;
+        const plan = req.plan;
+
+        if (plan !== 'premium') {
+            return res.json({ success: false, message: "This feature is only available for premium subscription" });
+        }
+
+        const image = req.file;
+        if (!image) return res.json({ success: false, message: "Image is required" });
+
+        const formData = new FormData();
+        formData.append('image_file', fs.createReadStream(image.path), {
+            filename: image.originalname,
+            contentType: image.mimetype,
+        });
+        if (target_width)  formData.append('target_width',  String(target_width));
+        if (target_height) formData.append('target_height', String(target_height));
+
+        const { data } = await axios.post('https://clipdrop-api.co/image-upscaling/v1/upscale', formData, {
+            headers: { 'x-api-key': process.env.CLIPDROP_API_KEY, ...formData.getHeaders() },
+            responseType: 'arraybuffer',
+        });
+
+        const base64Image = `data:image/png;base64,${Buffer.from(data).toString('base64')}`;
+        const { secure_url } = await cloudinary.uploader.upload(base64Image);
+
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+        VALUES (${userId}, 'Upscale image', ${secure_url}, 'image')`;
+
+        res.json({ success: true, content: secure_url });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+};

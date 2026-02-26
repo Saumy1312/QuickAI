@@ -12,6 +12,7 @@ import Community from './pages/Community'
 import { Toaster } from 'react-hot-toast'
 import AiChat from './pages/AiChat.jsx'
 import ScreenshotBugReport from './pages/ScreenshotBugReport'
+import MageTools from './pages/MageTools'
 
 const App = () => {
   return (
@@ -21,14 +22,16 @@ const App = () => {
         <Route path='/' element={<Home />} />
         <Route path='/ai' element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="ai-chat" element={<AiChat />} />
-          <Route path='write-article' element={<WriteArticle />} />
-          <Route path='generate-images' element={<GenerateImages />} />
-          <Route path='remove-background' element={<RemoveBackground />} />
-          <Route path='remove-object' element={<RemoveObject />} />
-          <Route path='review-resume' element={<ReviewResume />} />
+          <Route path="ai-chat"             element={<AiChat />} />
+          <Route path='write-article'       element={<WriteArticle />} />
+          <Route path='generate-images'     element={<GenerateImages />} />
+          <Route path='remove-background'   element={<RemoveBackground />} />
+          <Route path='remove-object'       element={<RemoveObject />} />
+          <Route path='review-resume'       element={<ReviewResume />} />
           <Route path='screenshot-bug-report' element={<ScreenshotBugReport />} />
-          <Route path='community' element={<Community />} />
+          <Route path='community'           element={<Community />} />
+          {/* ── New unified image tools page ── */}
+          <Route path='image-tools'         element={<MageTools />} />
         </Route>
       </Routes>
     </div>

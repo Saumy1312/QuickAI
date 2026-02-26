@@ -2,21 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Protect, useUser, useClerk } from '@clerk/clerk-react';
 import {
-  Eraser, FileText, Hash, House, Image,
-  LogOut, Scissors, SquarePen, Users, Code, Target, Bug
+  Eraser, FileText, House, Image,
+  LogOut, Scissors, SquarePen, Users, Bug, Wand2
 } from 'lucide-react';
 import { MessageCircle } from 'lucide-react';
 
 const navItems = [
-  { to: '/ai', label: 'Dashboard', Icon: House },
-  { to: '/ai/ai-chat', label: 'AI Chat', Icon: MessageCircle },
-  { to: '/ai/write-article', label: 'Write Article', Icon: SquarePen },
-  { to: '/ai/generate-images', label: 'Generate Images', Icon: Image },
-  { to: '/ai/remove-background', label: 'Remove Background', Icon: Eraser },
-  { to: '/ai/remove-object', label: 'Remove Object', Icon: Scissors },
-  { to: '/ai/review-resume', label: 'Review Resume', Icon: FileText },
-  { to: '/ai/screenshot-bug-report', label: 'Bug Report', Icon: Bug },
-  { to: '/ai/community', label: 'Community', Icon: Users },
+  { to: '/ai',                        label: 'Dashboard',       Icon: House },
+  { to: '/ai/ai-chat',                label: 'AI Chat',         Icon: MessageCircle },
+  { to: '/ai/write-article',          label: 'Write Article',   Icon: SquarePen },
+  { to: '/ai/generate-images',        label: 'Generate Images', Icon: Image },
+  { to: '/ai/image-tools',            label: 'Image Tools',     Icon: Wand2 },
+  { to: '/ai/remove-background',      label: 'Remove BG',       Icon: Eraser },
+  { to: '/ai/remove-object',          label: 'Remove Object',   Icon: Scissors },
+  { to: '/ai/review-resume',          label: 'Review Resume',   Icon: FileText },
+  { to: '/ai/screenshot-bug-report',  label: 'Bug Report',      Icon: Bug },
+  { to: '/ai/community',              label: 'Community',       Icon: Users },
 ];
 
 const Sidebar = ({ sidebar, setSidebar }) => {
