@@ -14,7 +14,7 @@ const Aitoole = () => {
   }, [])
 
   return (
-    <div className='bg-[#0A0A0D] px-4 sm:px-20 xl:px-32 py-24'>
+    <div id="features" className='bg-[#0A0A0D] px-4 sm:px-20 xl:px-32 py-24'>
       <div className='text-center mb-14'>
         <h2 data-aos="fade-up" className='text-white text-4xl sm:text-5xl font-bold'>Powerful AI Tools</h2>
         <p data-aos="fade-up" className='text-gray-500 max-w-lg mx-auto mt-4'>

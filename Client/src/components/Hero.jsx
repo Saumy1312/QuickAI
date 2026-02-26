@@ -60,7 +60,7 @@ const Hero = () => {
   }, [])
 
   return (
-    <div className='relative min-h-screen bg-[#0A0A0D] flex flex-col items-center justify-center px-4 overflow-hidden'>
+    <div id="home" className='relative min-h-screen bg-[#0A0A0D] flex flex-col items-center justify-center px-4 overflow-hidden'>
       <canvas ref={canvasRef} className='absolute inset-0 w-full h-full' />
 
       {/* Glow blobs */}

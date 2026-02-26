@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Gem, Sparkles, Clock } from 'lucide-react'
-import { Protect, useAuth } from '@clerk/clerk-react'
+import { useAuth } from '@clerk/clerk-react'
 import CreationItem from '../components/CreationItem'
 import AOS from 'aos';
 import 'aos/dist/aos.css';
@@ -12,7 +12,8 @@ axios.defaults.baseURL = import.meta.env.VITE_BASE_URL;
 const Dashboard = () => {
   const [creations, setCreations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { getToken } = useAuth();
+  const [plan, setPlan] = useState('Free');
+  const { getToken, has } = useAuth();
 
   const getDashboardData = async () => {
     try {
@@ -28,9 +29,18 @@ const Dashboard = () => {
     setLoading(false);
   };
 
+  const checkPlan = async () => {
+    try {
+      const isPremium = await has({ plan: 'premium' });
+      setPlan(isPremium ? 'Premium' : 'Free');
+    } catch (error) {
+      setPlan('Free');
+    }
+  };
+
   const handleDelete = async (id) => {
     try {
-      const { data } = await axios.delete(`/api/user/delete-creation/${id}`, {
+      const { data } = await axios.delete(`/api/ai/delete-creation/${id}`, {
         headers: { Authorization: `Bearer ${await getToken()}` }
       });
       if (data.success) {
@@ -44,7 +54,7 @@ const Dashboard = () => {
     }
   };
 
-  useEffect(() => { getDashboardData(); }, []);
+  useEffect(() => { getDashboardData(); checkPlan(); }, []);
   useEffect(() => { AOS.init({ duration: 600, easing: 'ease-out', once: true }); }, []);
 
   return (
@@ -63,9 +73,7 @@ const Dashboard = () => {
         <div className="flex justify-between items-center p-5 bg-[#0F0F12] rounded-xl border border-white/10 hover:border-white/20 transition-colors">
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Active Plan</p>
-            <h2 className="text-3xl font-bold mt-1">
-              <Protect plan="Premium" fallback="Free">Premium</Protect>
-            </h2>
+            <h2 className="text-3xl font-bold mt-1">{plan}</h2>
           </div>
           <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
             <Gem className="w-5 h-5 text-purple-400" />

@@ -520,3 +520,24 @@ export const renameChatSession = async (req, res) => {
         res.json({ success: false, message: error.message })
     }
 }
+export const deleteCreation = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { id } = req.params;
+
+        const result = await sql`
+            DELETE FROM creations 
+            WHERE id = ${id} AND user_id = ${userId}
+            RETURNING id
+        `;
+
+        if (result.length === 0) {
+            return res.json({ success: false, message: "Creation not found or unauthorized" });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+}

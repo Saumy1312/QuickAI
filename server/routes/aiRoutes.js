@@ -15,7 +15,8 @@ import {
   getChatSessions,
   getChatMessages,
   deleteChatSession,
-  renameChatSession
+  renameChatSession,
+  deleteCreation
 } from "../controllers/aiController.js";
 
 const aiRouter = express.Router();
@@ -30,6 +31,7 @@ aiRouter.post('/generate-code', auth, generateCode)
 aiRouter.post('/ai-chat', auth, aiChat)
 aiRouter.post('/resume-job-match', upload.single('resume'), auth, resumeJobMatcher)
 aiRouter.post('/screenshot-bug-report', upload.single('image'), auth, screenshotToBugReport)
+aiRouter.delete('/delete-creation/:id', auth, deleteCreation)
 
 // Chat session routes
 aiRouter.get('/chat-sessions', auth, getChatSessions)
