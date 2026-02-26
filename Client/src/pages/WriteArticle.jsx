@@ -260,11 +260,13 @@ const TagChip = ({ tag }) => (
 const SEOTab = ({ prefillArticle, prefillTopic }) => {
   const [article, setArticle]          = useState(prefillArticle || '')
   const [topic, setTopic]              = useState(prefillTopic || '')
+  const [collapsed, setCollapsed]      = useState(false)
   const { loading, content, generate } = useGenerateText('/api/ai/generate-article', 'seo-analysis-content')
   const { copied, copy }               = useCopyToClipboard()
 
   const onSubmit = async (e) => {
     e.preventDefault()
+    setCollapsed(true)
     await generate({
       prompt: `You are an SEO expert. Analyse this article and return a structured SEO report.
 
@@ -341,23 +343,45 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8`,
 
   return (
     <div className='flex flex-col h-full'>
-      <div className='border-b border-white/10 bg-[#0F0F12] px-4 py-3 flex-shrink-0'>
-        <form onSubmit={onSubmit} className='flex flex-col gap-2'>
-          <input value={topic} onChange={e => setTopic(e.target.value)} required
-            placeholder='Target keyword / topic...'
-            className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors' />
-          <textarea value={article} onChange={e => setArticle(e.target.value)} required rows={10}
-            placeholder='Paste your article here, or generate one and click "Analyse SEO"...'
-            className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors resize-y min-h-[120px] max-h-[400px]' />
-          <button disabled={loading}
-            className='flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 text-white text-sm font-medium disabled:opacity-50'>
-            {loading
-              ? <><span className='w-4 h-4 rounded-full border-2 border-t-transparent animate-spin' /> Analysing...</>
-              : <><Search className='w-4 h-4' /> Analyse SEO</>}
-          </button>
-        </form>
+
+      {/* Form — collapses after submit */}
+      <div className='border-b border-white/10 bg-[#0F0F12] flex-shrink-0'>
+        {collapsed ? (
+          /* Collapsed summary bar */
+          <div className='px-4 py-2 flex items-center justify-between gap-3'>
+            <div className='flex items-center gap-2 min-w-0'>
+              <Search className='w-3.5 h-3.5 text-green-400 flex-shrink-0' />
+              <span className='text-xs text-gray-400 truncate'>
+                <span className='text-white font-medium'>{topic}</span>
+                {article && <span className='text-gray-600'> · {article.slice(0, 40).trim()}…</span>}
+              </span>
+            </div>
+            <button
+              onClick={() => setCollapsed(false)}
+              className='text-xs text-gray-500 hover:text-white border border-white/10 px-2.5 py-1 rounded-lg transition-colors flex-shrink-0'>
+              Edit
+            </button>
+          </div>
+        ) : (
+          /* Full form */
+          <form onSubmit={onSubmit} className='px-4 py-3 flex flex-col gap-2'>
+            <input value={topic} onChange={e => setTopic(e.target.value)} required
+              placeholder='Target keyword / topic...'
+              className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors' />
+            <textarea value={article} onChange={e => setArticle(e.target.value)} required rows={4}
+              placeholder='Paste your article here, or generate one and click "Analyse SEO"...'
+              className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors resize-y min-h-[80px] max-h-[160px]' />
+            <button disabled={loading}
+              className='flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 text-white text-sm font-medium disabled:opacity-50'>
+              {loading
+                ? <><span className='w-4 h-4 rounded-full border-2 border-t-transparent animate-spin' /> Analysing...</>
+                : <><Search className='w-4 h-4' /> Analyse SEO</>}
+            </button>
+          </form>
+        )}
       </div>
 
+      {/* Results */}
       <div className='flex-1 overflow-y-auto p-4'>
         {!content ? (
           <div className='flex flex-col items-center justify-center h-full text-gray-700 gap-3'>
