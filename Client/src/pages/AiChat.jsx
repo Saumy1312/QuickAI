@@ -35,7 +35,6 @@ const extractPdfText = async (file) => {
   return fullText.trim()
 }
 
-
 const AiChat = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -47,7 +46,8 @@ const AiChat = () => {
   const [showSidebar, setShowSidebar] = useState(false)
   const [loadingSession, setLoadingSession] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState(null)
-  const [attachment, setAttachment] = useState(null)
+  const [attachment, setAttachment] = useState(null) // current pending attachment
+  const [sessionContext, setSessionContext] = useState(null) // { type, fileName, fileText, imageUrl } — persists for whole session
   const [uploading, setUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef(null)
@@ -124,7 +124,7 @@ const AiChat = () => {
         else { toast.error(data.message); setAttachment(null); setUploading(false); return }
       }
       setAttachment({ type: 'file', name: file.name, extractedText: text })
-      toast.success('File ready!')
+      toast.success('File ready! Ask anything about it.')
     } catch (e) {
       toast.dismiss('pdf-extract')
       toast.error('Failed to read file')
@@ -135,10 +135,16 @@ const AiChat = () => {
 
   const handleImageSelect = async (e) => { const f = e.target.files[0]; if (f) await processImage(f) }
   const handleFileSelect = async (e) => { const f = e.target.files[0]; if (f) await processFile(f) }
+
   const removeAttachment = () => {
     setAttachment(null)
     if (imageInputRef.current) imageInputRef.current.value = ''
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const clearSessionContext = () => {
+    setSessionContext(null)
+    toast.success('File context cleared')
   }
 
   const copyMessage = (content, index) => {
@@ -163,14 +169,19 @@ const AiChat = () => {
       setLoadingSession(true)
       const { data } = await axios.get(`/api/ai/chat-messages/${id}`, { headers: { Authorization: `Bearer ${await getToken()}` } })
       if (data.success) {
-        setMessages(data.messages); setCurrentSessionId(id); setShowSidebar(false)
+        setMessages(data.messages); setCurrentSessionId(id)
+        setSessionContext(null) // clear context when switching sessions
+        setShowSidebar(false)
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       }
     } catch (e) { toast.error(e.message) }
     setLoadingSession(false)
   }
 
-  const startNewChat = () => { setMessages([]); setCurrentSessionId(null); setInput(''); setAttachment(null); setShowSidebar(false) }
+  const startNewChat = () => {
+    setMessages([]); setCurrentSessionId(null); setInput('')
+    setAttachment(null); setSessionContext(null); setShowSidebar(false)
+  }
 
   const deleteSession = async (e, id) => {
     e.stopPropagation()
@@ -192,19 +203,27 @@ const AiChat = () => {
     } catch (e) { toast.error(e.message) }
   }
 
-  const sendMessage = async (promptOverride) => {
-    const finalPrompt = promptOverride || input
-    if (!finalPrompt.trim() && !attachment) return
+  const sendMessage = async () => {
+    if (!input.trim() && !attachment) return
     if (attachment && !attachment.url && !attachment.extractedText) return toast.error('Still processing, please wait')
+
+    // If there's a new attachment, set it as the session context (persists for whole conversation)
+    let activeContext = sessionContext
+    if (attachment) {
+      const newContext = attachment.type === 'image'
+        ? { type: 'image', imageUrl: attachment.url, fileName: attachment.name }
+        : { type: 'file', fileText: attachment.extractedText, fileName: attachment.name }
+      setSessionContext(newContext)
+      activeContext = newContext
+    }
 
     const userMessage = {
       role: 'user',
-      content: finalPrompt,
+      content: input,
       imageUrl: attachment?.type === 'image' ? attachment.url : null,
       fileName: attachment?.type === 'file' ? attachment.name : null,
     }
     setMessages(prev => [...prev, userMessage])
-    const currentAttachment = attachment
     setInput(''); setAttachment(null)
     if (imageInputRef.current) imageInputRef.current.value = ''
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -213,12 +232,13 @@ const AiChat = () => {
     try {
       setLoading(true)
       const { data } = await axios.post('/api/ai/ai-chat', {
-        prompt: finalPrompt,
+        prompt: input,
         sessionId: currentSessionId,
         messages: [...messages, userMessage],
-        imageUrl: currentAttachment?.type === 'image' ? currentAttachment.url : null,
-        fileText: currentAttachment?.type === 'file' ? currentAttachment.extractedText : null,
-        fileName: currentAttachment?.type === 'file' ? currentAttachment.name : null,
+        // Always send the active context so AI remembers the file/image throughout conversation
+        imageUrl: activeContext?.type === 'image' ? activeContext.imageUrl : null,
+        fileText: activeContext?.type === 'file' ? activeContext.fileText : null,
+        fileName: activeContext?.fileName || null,
       }, { headers: { Authorization: `Bearer ${await getToken()}` } })
 
       if (data.success) {
@@ -233,7 +253,7 @@ const AiChat = () => {
 
   const getFileIcon = (name) => {
     if (!name) return '📄'
-    const ext = name.split('.').pop().toLowerCase()
+    const ext = name?.split('.').pop().toLowerCase()
     if (ext === 'pdf') return '📕'
     if (['doc', 'docx'].includes(ext)) return '📘'
     if (['xls', 'xlsx'].includes(ext)) return '📗'
@@ -336,6 +356,19 @@ const AiChat = () => {
           )}
         </div>
 
+        {/* Active session context banner */}
+        {sessionContext && (
+          <div className='px-4 py-2 bg-purple-500/5 border-b border-purple-500/20 flex items-center gap-2'>
+            <span className='text-sm'>{sessionContext.type === 'image' ? '🖼️' : getFileIcon(sessionContext.fileName)}</span>
+            <span className='text-xs text-purple-300 flex-1 truncate'>
+              <span className='text-purple-500'>Context: </span>{sessionContext.fileName} — AI remembers this for the whole conversation
+            </span>
+            <button onClick={clearSessionContext} className='text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0'>
+              <X className='w-3.5 h-3.5' />
+            </button>
+          </div>
+        )}
+
         {/* Messages */}
         <div ref={scrollContainerRef} className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
           {messages.length === 0 && (
@@ -347,7 +380,7 @@ const AiChat = () => {
                   { icon: '🖼️', label: 'Analyze images' },
                   { icon: '📝', label: 'OCR / Extract text' },
                   { icon: '📕', label: 'Read PDFs (any size)' },
-                  { icon: '📘', label: 'Word & Excel files' },
+                  { icon: '💬', label: 'Full conversation on file' },
                 ].map(item => (
                   <div key={item.label} className='flex items-center gap-2 border border-white/8 rounded-lg px-3 py-2 text-gray-600'>
                     <span>{item.icon}</span><span>{item.label}</span>
@@ -390,7 +423,7 @@ const AiChat = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Attachment preview */}
+        {/* Pending attachment preview */}
         {attachment && (
           <div className='px-3 py-2 bg-[#0F0F12] border-t border-white/5'>
             <div className='relative inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2'>
@@ -405,7 +438,7 @@ const AiChat = () => {
                   <div>
                     <p className='text-xs text-white truncate max-w-[150px]'>{attachment.name}</p>
                     <p className='text-[10px] text-gray-500'>
-                      {uploading ? 'Reading file...' : attachment.extractedText ? '✓ Ready' : 'Processing...'}
+                      {uploading ? 'Reading file...' : attachment.extractedText ? '✓ Ready — type your question' : 'Processing...'}
                     </p>
                   </div>
                 </>
@@ -415,8 +448,6 @@ const AiChat = () => {
                 <X className='w-2.5 h-2.5 text-white' />
               </button>
             </div>
-
-
           </div>
         )}
 
@@ -436,8 +467,9 @@ const AiChat = () => {
 
           <input type='text' value={input} onChange={e => setInput(e.target.value)}
             placeholder={
-              attachment?.type === 'image' ? 'Ask about this image or pick an action above...' :
-              attachment?.type === 'file' ? 'Ask about this document or pick an action above...' :
+              attachment?.type === 'image' ? 'Ask about this image...' :
+              attachment?.type === 'file' ? 'Ask anything about this file...' :
+              sessionContext ? `Chatting about ${sessionContext.fileName} — ask anything...` :
               'Ask anything or drop a file...'
             }
             className='flex-1 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-500 focus:border-purple-500/50 transition-colors min-w-0' />
