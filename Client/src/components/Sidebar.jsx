@@ -10,7 +10,6 @@ import { MessageCircle } from 'lucide-react';
 const navItems = [
   { to: '/ai', label: 'Dashboard', Icon: House },
   { to: '/ai/ai-chat', label: 'AI Chat', Icon: MessageCircle },
-  { to: '/ai/generate-code', label: 'Generate Code', Icon: Code },
   { to: '/ai/write-article', label: 'Write Article', Icon: SquarePen },
   { to: '/ai/generate-images', label: 'Generate Images', Icon: Image },
   { to: '/ai/remove-background', label: 'Remove Background', Icon: Eraser },
