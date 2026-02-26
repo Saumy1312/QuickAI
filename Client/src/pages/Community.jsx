@@ -161,7 +161,7 @@ const Community = () => {
                                     {/* Clickable creator info */}
                                     <button
                                         onClick={() => setSelectedUserId(creation.user_id)}
-                                        className='flex items-center gap-2 hover:opacity-80 transition-opacity'>
+                                        className='flex items-center gap-2 cursor-pointer bg-black/40 hover:bg-white/20 border border-white/10 hover:border-white/30 rounded-full px-2 py-1 transition-all'>
                                         {creation.creator_avatar ? (
                                             <img src={creation.creator_avatar} alt={creation.creator_name}
                                                 className='w-6 h-6 rounded-full border border-white/20 object-cover flex-shrink-0' />
