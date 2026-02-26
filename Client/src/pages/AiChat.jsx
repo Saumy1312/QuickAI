@@ -35,6 +35,22 @@ const extractPdfText = async (file) => {
   return fullText.trim()
 }
 
+const compressImage = (file) => {
+  return new Promise((resolve) => {
+    const img = new window.Image()
+    img.src = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const MAX = 1920
+      let { width, height } = img
+      if (width > MAX) { height = (height * MAX) / width; width = MAX }
+      canvas.width = width; canvas.height = height
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+      canvas.toBlob(blob => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.85)
+    }
+  })
+}
+
 const AiChat = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -89,8 +105,15 @@ const AiChat = () => {
     setAttachment({ type: 'image', preview, url: null, name: file.name })
     try {
       setUploading(true)
+      // Compress if over 4MB to stay within Vercel's payload limit
+      let fileToUpload = file
+      if (file.size > 4 * 1024 * 1024) {
+        toast.loading('Compressing image...', { id: 'compress' })
+        fileToUpload = await compressImage(file)
+        toast.dismiss('compress')
+      }
       const formData = new FormData()
-      formData.append('image', file)
+      formData.append('image', fileToUpload)
       const { data } = await axios.post('/api/ai/upload-chat-image', formData, {
         headers: { Authorization: `Bearer ${await getToken()}` }
       })
