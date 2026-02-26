@@ -323,24 +323,20 @@ export const aiChat = async (req, res) => {
             return { role: m.role, content: m.content }
         })
 
-        // Build current user message
-        const lastMsg = conversationHistory[conversationHistory.length - 1]
-        if (!lastMsg || lastMsg.content !== prompt) {
-            if (imageUrl) {
-                conversationHistory.push({
-                    role: 'user',
-                    content: [
-                        { type: "text", text: prompt || 'What is in this image?' },
-                        { type: "image_url", image_url: { url: imageUrl } }
-                    ]
-                })
-            } else if (fileText) {
-                // Inject file content into prompt
-                const filePrompt = `The user has uploaded a file called "${fileName || 'document'}".\n\nFile contents:\n${fileText}\n\nUser question: ${prompt || 'Please analyze this document.'}`
-                conversationHistory.push({ role: 'user', content: filePrompt })
-            } else {
-                conversationHistory.push({ role: 'user', content: prompt })
-            }
+        // Build current user message — always push it
+        if (imageUrl) {
+            conversationHistory.push({
+                role: 'user',
+                content: [
+                    { type: "text", text: prompt || 'What is in this image?' },
+                    { type: "image_url", image_url: { url: imageUrl } }
+                ]
+            })
+        } else if (fileText) {
+            const filePrompt = `The user has uploaded a file called "${fileName || 'document'}".\n\nFile contents:\n${fileText}\n\nUser question: ${prompt || 'Please analyze this document.'}`
+            conversationHistory.push({ role: 'user', content: filePrompt })
+        } else {
+            conversationHistory.push({ role: 'user', content: prompt })
         }
 
         const hasImage = imageUrl || messages.some(m => m.imageUrl)
