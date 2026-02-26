@@ -310,7 +310,12 @@ export const aiChat = async (req, res) => {
         const { userId } = req.auth();
         const { prompt, sessionId, messages = [], imageUrl, fileText, fileName } = req.body;
 
-        const conversationHistory = messages.map(m => {
+        const conversationHistory = [
+            {
+                role: 'system',
+                content: 'You are a helpful AI assistant. When the user shares a file or document, answer their questions about it directly and naturally — never start with phrases like "Based on the content provided" or "The document appears to be". Just answer directly as if you already know the content.'
+            },
+            ...messages.map(m => {
             if (m.imageUrl) {
                 return {
                     role: m.role,
@@ -321,7 +326,7 @@ export const aiChat = async (req, res) => {
                 }
             }
             return { role: m.role, content: m.content }
-        })
+        })]
 
         // Build current user message — always push it
         if (imageUrl) {
@@ -333,7 +338,7 @@ export const aiChat = async (req, res) => {
                 ]
             })
         } else if (fileText) {
-            const filePrompt = `The user has uploaded a file called "${fileName || 'document'}".\n\nFile contents:\n${fileText}\n\nUser question: ${prompt || 'Please analyze this document.'}`
+            const filePrompt = `File: "${fileName || 'document'}"\n\n${fileText}\n\n---\n${prompt || 'Please analyze this document.'}`
             conversationHistory.push({ role: 'user', content: filePrompt })
         } else {
             conversationHistory.push({ role: 'user', content: prompt })

@@ -356,18 +356,7 @@ const AiChat = () => {
           )}
         </div>
 
-        {/* Active session context banner */}
-        {sessionContext && (
-          <div className='px-4 py-2 bg-purple-500/5 border-b border-purple-500/20 flex items-center gap-2'>
-            <span className='text-sm'>{sessionContext.type === 'image' ? '🖼️' : getFileIcon(sessionContext.fileName)}</span>
-            <span className='text-xs text-purple-300 flex-1 truncate'>
-              <span className='text-purple-500'>Context: </span>{sessionContext.fileName} — AI remembers this for the whole conversation
-            </span>
-            <button onClick={clearSessionContext} className='text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0'>
-              <X className='w-3.5 h-3.5' />
-            </button>
-          </div>
-        )}
+
 
         {/* Messages */}
         <div ref={scrollContainerRef} className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
