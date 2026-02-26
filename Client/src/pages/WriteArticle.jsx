@@ -368,9 +368,9 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8`,
             <input value={topic} onChange={e => setTopic(e.target.value)} required
               placeholder='Target keyword / topic...'
               className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors' />
-            <textarea value={article} onChange={e => setArticle(e.target.value)} required rows={4}
+            <textarea value={article} onChange={e => setArticle(e.target.value)} required rows={8}
               placeholder='Paste your article here, or generate one and click "Analyse SEO"...'
-              className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors resize-y min-h-[80px] max-h-[160px]' />
+              className='w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none text-sm text-white placeholder-gray-600 focus:border-green-500/50 transition-colors resize-y min-h-[200px] max-h-[300px]' />
             <button disabled={loading}
               className='flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 text-white text-sm font-medium disabled:opacity-50'>
               {loading
