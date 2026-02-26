@@ -1,5 +1,4 @@
-
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Home from './pages/Home'
 import Layout from './pages/Layout'
@@ -11,38 +10,29 @@ import RemoveBackground from './pages/RemoveBackground'
 import RemoveObject from './pages/RemoveObject'
 import ReviewResume from './pages/ReviewResume'
 import Community from './pages/Community'
-import { useAuth } from '@clerk/clerk-react'
-import {Toaster} from 'react-hot-toast'
-import GenerateCode from './pages/GenerateCode'
-import AiChat from './pages/AiChat.jsx' 
+import { Toaster } from 'react-hot-toast'
+import AiChat from './pages/AiChat.jsx'
 import ResumeJobMatcher from './pages/ResumeJobMatcher'
 import ScreenshotBugReport from './pages/ScreenshotBugReport'
 
-
- 
-
-
 const App = () => {
-
   return (
     <div>
       <Toaster />
       <Routes>
-        <Route path= '/' element= {<Home />}/>
-        <Route path= '/ai' element= {<Layout />}>
-          <Route index element= {<Dashboard />}/>
+        <Route path='/' element={<Home />} />
+        <Route path='/ai' element={<Layout />}>
+          <Route index element={<Dashboard />} />
           <Route path="ai-chat" element={<AiChat />} />
-          <Route path='write-article' element= {<WriteArticle />}/>
-          <Route path='generate-images' element= {<GenerateImages />}/>
-          <Route path='remove-background' element= {<RemoveBackground />}/>
-          <Route path='remove-object' element= {<RemoveObject />}/>
-          <Route path='review-resume' element= {<ReviewResume />}/>
-          <Route path='resume-job-matcher' element={<ResumeJobMatcher />}/>
-          <Route path='screenshot-bug-report' element={<ScreenshotBugReport />}/>  
-          <Route path='community' element= {<Community />}/>   
-          
+          <Route path='write-article' element={<WriteArticle />} />
+          <Route path='generate-images' element={<GenerateImages />} />
+          <Route path='remove-background' element={<RemoveBackground />} />
+          <Route path='remove-object' element={<RemoveObject />} />
+          <Route path='review-resume' element={<ReviewResume />} />
+          <Route path='resume-job-matcher' element={<ResumeJobMatcher />} />
+          <Route path='screenshot-bug-report' element={<ScreenshotBugReport />} />
+          <Route path='community' element={<Community />} />
         </Route>
-        
       </Routes>
     </div>
   )
