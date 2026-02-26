@@ -421,7 +421,7 @@ Generate a detailed bug report in this exact format:
 [Any other observations from the screenshot]`
 
         const response = await AI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
             messages: [{
                 role: "user",
                 content: [
