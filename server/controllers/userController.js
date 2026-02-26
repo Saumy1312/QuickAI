@@ -23,7 +23,6 @@ export const getUserPublishedCreations = async (req, res) => {
             ORDER BY created_at DESC
         `;
 
-        // Fetch unique user info from Clerk in bulk
         const uniqueUserIds = [...new Set(creations.map(c => c.user_id))];
         const userMap = {};
 
@@ -66,7 +65,6 @@ export const toggleLikeCreations = async (req, res) => {
 
         const currentLikes = Array.isArray(creation.likes) ? creation.likes : [];
         const userIdStr = String(userId);
-
         let updatedLikes;
         let message;
 
@@ -85,6 +83,39 @@ export const toggleLikeCreations = async (req, res) => {
         `;
 
         res.json({ success: true, message });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const getPublicProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await clerkClient.users.getUser(userId);
+
+        const creations = await sql`
+            SELECT * FROM creations
+            WHERE user_id = ${userId} AND publish = true
+            ORDER BY created_at DESC
+        `;
+
+        const totalLikes = creations.reduce((sum, c) => {
+            const likes = Array.isArray(c.likes) ? c.likes : [];
+            return sum + likes.length;
+        }, 0);
+
+        res.json({
+            success: true,
+            profile: {
+                name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Anonymous',
+                avatar: user.imageUrl || null,
+                joinedAt: user.createdAt,
+                publicCreations: creations.length,
+                totalLikes,
+                creations,
+            }
+        });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
