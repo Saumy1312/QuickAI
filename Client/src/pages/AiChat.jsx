@@ -62,8 +62,8 @@ const AiChat = () => {
   const [showSidebar, setShowSidebar] = useState(false)
   const [loadingSession, setLoadingSession] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState(null)
-  const [attachment, setAttachment] = useState(null) // current pending attachment
-  const [sessionContext, setSessionContext] = useState(null) // { type, fileName, fileText, imageUrl } — persists for whole session
+  const [attachment, setAttachment] = useState(null)
+  const [sessionContext, setSessionContext] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef(null)
@@ -105,7 +105,6 @@ const AiChat = () => {
     setAttachment({ type: 'image', preview, url: null, name: file.name })
     try {
       setUploading(true)
-      // Compress if over 4MB to stay within Vercel's payload limit
       let fileToUpload = file
       if (file.size > 4 * 1024 * 1024) {
         toast.loading('Compressing image...', { id: 'compress' })
@@ -165,11 +164,6 @@ const AiChat = () => {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const clearSessionContext = () => {
-    setSessionContext(null)
-    toast.success('File context cleared')
-  }
-
   const copyMessage = (content, index) => {
     navigator.clipboard.writeText(content); setCopiedIndex(index)
     toast.success('Copied!'); setTimeout(() => setCopiedIndex(null), 2000)
@@ -193,8 +187,7 @@ const AiChat = () => {
       const { data } = await axios.get(`/api/ai/chat-messages/${id}`, { headers: { Authorization: `Bearer ${await getToken()}` } })
       if (data.success) {
         setMessages(data.messages); setCurrentSessionId(id)
-        setSessionContext(null) // clear context when switching sessions
-        setShowSidebar(false)
+        setSessionContext(null); setShowSidebar(false)
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       }
     } catch (e) { toast.error(e.message) }
@@ -230,7 +223,6 @@ const AiChat = () => {
     if (!input.trim() && !attachment) return
     if (attachment && !attachment.url && !attachment.extractedText) return toast.error('Still processing, please wait')
 
-    // If there's a new attachment, set it as the session context (persists for whole conversation)
     let activeContext = sessionContext
     if (attachment) {
       const newContext = attachment.type === 'image'
@@ -241,8 +233,7 @@ const AiChat = () => {
     }
 
     const userMessage = {
-      role: 'user',
-      content: input,
+      role: 'user', content: input,
       imageUrl: attachment?.type === 'image' ? attachment.url : null,
       fileName: attachment?.type === 'file' ? attachment.name : null,
     }
@@ -255,10 +246,8 @@ const AiChat = () => {
     try {
       setLoading(true)
       const { data } = await axios.post('/api/ai/ai-chat', {
-        prompt: input,
-        sessionId: currentSessionId,
+        prompt: input, sessionId: currentSessionId,
         messages: [...messages, userMessage],
-        // Always send the active context so AI remembers the file/image throughout conversation
         imageUrl: activeContext?.type === 'image' ? activeContext.imageUrl : null,
         fileText: activeContext?.type === 'file' ? activeContext.fileText : null,
         fileName: activeContext?.fileName || null,
@@ -348,7 +337,7 @@ const AiChat = () => {
                 <Paperclip className='w-8 h-8 text-purple-300' />
               </div>
               <p className='text-purple-200 font-semibold text-lg'>Drop to attach</p>
-              <p className='text-purple-400 text-sm'>Images (OCR), PDF (any size), Word, Excel, TXT</p>
+              <p className='text-purple-400 text-sm'>Images, PDF, Word, Excel, TXT</p>
             </div>
           </div>
         )}
@@ -379,8 +368,6 @@ const AiChat = () => {
           )}
         </div>
 
-
-
         {/* Messages */}
         <div ref={scrollContainerRef} className='flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3'>
           {messages.length === 0 && (
@@ -401,9 +388,10 @@ const AiChat = () => {
               </div>
             </div>
           )}
+
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`group relative max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
+              <div className={`relative max-w-[88%] sm:max-w-[75%] px-3 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
                 ? 'bg-purple-600/20 border border-purple-500/30 text-purple-100 rounded-br-sm'
                 : 'bg-[#0F0F12] border border-white/10 text-gray-300 rounded-bl-sm'}`}>
                 {msg.imageUrl && <img src={msg.imageUrl} alt="attached" className='w-full max-w-xs rounded-lg mb-2 border border-white/10' />}
@@ -416,13 +404,16 @@ const AiChat = () => {
                 {msg.role === 'assistant'
                   ? <div className='reset-tw prose prose-invert prose-sm max-w-none'><Markdown>{msg.content}</Markdown></div>
                   : msg.content}
-                <button onClick={() => copyMessage(msg.content, i)}
-                  className='absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1a1a1f] border border-white/10 rounded-md p-1 text-gray-400 hover:text-white'>
+                {/* ── Copy button: always visible on mobile, hover on desktop ── */}
+                <button
+                  onClick={() => copyMessage(msg.content, i)}
+                  className='absolute -top-2 -right-2 sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity bg-[#1a1a1f] border border-white/10 rounded-md p-1 text-gray-400 hover:text-white active:scale-90'>
                   {copiedIndex === i ? <Check className='w-3 h-3 text-green-400' /> : <Copy className='w-3 h-3' />}
                 </button>
               </div>
             </div>
           ))}
+
           {loading && (
             <div className='flex justify-start'>
               <div className='bg-[#0F0F12] border border-white/10 px-4 py-3 rounded-xl rounded-bl-sm'>
